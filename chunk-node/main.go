@@ -120,7 +120,7 @@ func buildServerCommand() *cli.Command {
 				chunk.Module(dataDir),
 				node.Module(&cfg.Node, dataDir),
 				transport.Module(),
-				service.Module(argServerVolumes, cfg.Node.Advertise.GrpcURLs),
+				service.Module(argServerVolumes, cfg.Node.Advertise.GRPC.URLs),
 			).Run()
 
 			return nil

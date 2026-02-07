@@ -14,7 +14,11 @@ type Config struct {
 }
 
 type ConfigAdvertise struct {
-	GrpcURLs []string `koanf:"grpcUrls"`
+	GRPC ConfigAdvertiseGRPC `koanf:"grpc"`
+}
+
+type ConfigAdvertiseGRPC struct {
+	URLs []string `koanf:"urls"`
 }
 
 func Module(cfg *Config, dataDir string) fx.Option {
