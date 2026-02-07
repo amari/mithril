@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "gen/rust/proto",
+    "mithril-sdk-rs",
+]
+resolver = "3"
