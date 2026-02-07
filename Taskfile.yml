@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3"
+
+vars:
+  GREETING: Hello, world!
+
+tasks:
+  proto-generate:
+    desc: Generate protobuf code
+    sources:
+      - proto/**/*.proto
+      - buf.gen.yaml
+    generates:
+      - gen/**
+    cmds:
+      - buf generate
+  proto-lint:
+    desc: Run buf lint on proto definitions
+    cmds:
+      - buf lint
+  proto-check-breaking:
+    desc: Check for breaking changes in proto APIs
+    cmds:
+      - buf breaking proto --against '.git#ref=HEAD,subdir=proto'
+  go-build:
+    desc: Build the Go project
+    deps: [proto-generate]
+    cmds:
+      - go build ./chunk-node/...
+  go-test:
+    desc: Run Go project tests
+    deps: [proto-generate]
+    cmds:
+      - go test ./chunk-node/...
+  go-clean:
+    desc: Run Go clean
+    cmds:
+      - go clean
+  go-tidy:
+    desc: Run Go mod tidy
+    deps: [proto-generate]
+    cmds:
+      - go mod tidy
+  rust-build:
+    desc: Build the Rust workspace
+    cmds:
+      - cargo build --workspace
+  rust-test:
+    desc: Run Rust tests
+    cmds:
+      - cargo test --workspace
+  rust-clean:
+    desc: Clean Rust build artifacts
+    cmds:
+      - cargo clean
+  test:
+    desc: Run tests
+    deps: [go-test, rust-test]
+    cmds: []
+  clean:
+    desc: Clean build artifacts
+    deps: [go-clean, rust-clean]
+    cmds: []
