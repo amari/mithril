@@ -1,0 +1,134 @@
+version: "3.8"
+services:
+  jaeger:
+    image: "cr.jaegertracing.io/jaegertracing/jaeger:2.15.0"
+    environment:
+      SPAN_STORAGE_TYPE: badger
+      BADGER_DIRECTORY: /data
+      BADGER_EPHEMERAL: "false"
+    volumes:
+      - jaeger-data:/data
+    ports:
+      - "16686:16686" # Jaeger UI
+    restart: on-failure:3
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+  prometheus:
+    image: "quay.io/prometheus/prometheus:v3.9.1"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.listen-address=:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090" # Prometheus UI
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+  grafana:
+    image: "grafana/grafana:12.3"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=grafana
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    ports:
+      - "3000:3000" # Grafana UI
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+  etcd:
+    image: "quay.io/coreos/etcd:v3.6.7"
+    entrypoint: /usr/local/bin/etcd
+    ports:
+      - 2379
+    environment:
+      ETCD_NAME: "etcd-node-1"
+      ETCD_LISTEN_CLIENT_URLS: "http://0.0.0.0:2379"
+      ETCD_ADVERTISE_CLIENT_URLS: "http://etcd:2379"
+      ETCD_LISTEN_PEER_URLS: "http://0.0.0.0:2380"
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: "http://etcd:2380"
+      ETCD_INITIAL_CLUSTER_TOKEN: "etcd-cluster-token"
+      ETCD_INITIAL_CLUSTER: "etcd-node-1=http://etcd:2380"
+      ETCD_INITIAL_CLUSTER_STATE: "new"
+      ALLOW_NONE_AUTHENTICATION: "yes"
+    volumes:
+      - etcd-data:/etcd_data
+  chunk-node:
+    build:
+      context: ../
+      dockerfile: dev/go.Dockerfile
+    depends_on:
+      - etcd
+    environment:
+      MITHRIL_ETCD_ENDPOINTS: etcd:2379
+      MITHRIL_GRPC_ADDRESS: "[::]:50051"
+      MITHRIL_HEALTH_PORT: 8081
+      MITHRIL_LOG_LEVEL: info
+      MITHRIL_LOG_PRETTY: true
+      MITHRIL_NODE_ADVERTISE_GRPC_URLS: chunk-node:50051
+      MITHRIL_PPROF_PORT: 6060
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "jaeger:4317"
+      OTEL_EXPORTER_OTLP_TRACES_INSECURE: "true"
+      OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: grpc
+      OTEL_EXPORTER_PROMETHEUS_HOST: "::"
+      OTEL_EXPORTER_PROMETHEUS_PORT: "9464"
+      OTEL_METRICS_EXPORTER: prometheus
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_SERVICE_NAME: mithril-chunk-node
+
+    command:
+      - "/usr/local/bin/mithril-chunk-node"
+      - "server"
+      - "--config-dir"
+      - "/etc/mithril.d"
+      - "--data-dir"
+      - "/var/lib/mithril/chunk-node"
+      - "/volume"
+    volumes:
+      - ./config:/etc/mithril.d:ro
+      - chunk-node-data:/var/lib/mithril/chunk-node
+      - chunk-node-volume:/volume
+    ports:
+      - 50051:50051
+      - 9464:9464
+      - 8081:8081
+      - 6060:6060
+    restart: on-failure:3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+volumes:
+  chunk-node-data:
+  chunk-node-volume:
+  etcd-data:
+  grafana-data:
+  jaeger-data:
+  prometheus-data:

@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: "Mithril In-Tree Dev Dashboards"
+    folder: "Mithril Dev (In-Tree)"
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards
