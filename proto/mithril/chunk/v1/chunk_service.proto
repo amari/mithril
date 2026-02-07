@@ -1,0 +1,193 @@
+syntax = "proto3";
+
+package mithril.chunk.v1;
+
+import "buf/validate/validate.proto";
+
+option go_package = "github.com/amari/mithril/gen/go/proto/mithril/chunk/v1;chunkv1";
+
+message Chunk {
+  bytes id = 1;
+  uint64 version = 2;
+  int64 size = 3;
+}
+
+message Volume {
+  enum State {
+    STATE_UNSPECIFIED = 0; // Should never be returned
+    STATE_OK = 1; // Healthy - all operations allowed
+    STATE_DEGRADED = 2; // Impaired - only read/stat allowed
+    STATE_FAILED = 3; // Dead - only stat allowed (for debugging)
+  }
+  State state = 1;
+}
+
+message ErrorDetails {
+  ErrorCode code = 1;
+  // Local/target chunk
+  optional Chunk chunk = 2;
+  // Local/target volume
+  optional Volume volume = 3;
+  // Remote/source chunk (for cross-node ops)
+  optional Chunk remote_chunk = 4;
+  // Remote/source volume (for cross-node ops)
+  optional Volume remote_volume = 5;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_NOT_FOUND = 1; // Chunk doesn't exist
+  ERROR_CODE_VERSION_MISMATCH = 2; // Optimistic lock failure
+  ERROR_CODE_INVALID_ARGUMENT = 3; // Bad request parameters
+  ERROR_CODE_NO_SPACE = 4; // Volume full
+  ERROR_CODE_INTERNAL = 5; // Server error
+  ERROR_CODE_VOLUME_DEGRADED = 6; // volume health error
+  ERROR_CODE_VOLUME_FAILED = 7; // volume health error
+  ERROR_CODE_SHORT_WRITE = 8;
+  ERROR_CODE_PROTOCOL_ERROR = 9;
+  ERROR_CODE_ALREADY_EXISTS = 10; // Writer key conflict
+  ERROR_CODE_WRITER_KEY_MISMATCH = 11; // Authorization failure
+  ERROR_CODE_WRONG_STATE = 12; // Chunk in wrong state for operation
+  ERROR_CODE_WRONG_NODE = 13; // Request sent to wrong node
+}
+
+service ChunkService {
+  rpc CreateChunk(CreateChunkRequest) returns (CreateChunkResponse);
+
+  rpc PutChunk(stream PutChunkRequest) returns (PutChunkResponse);
+
+  rpc AppendChunk(stream AppendChunkRequest) returns (AppendChunkResponse);
+
+  rpc AppendFromChunk(AppendFromChunkRequest) returns (AppendFromChunkResponse);
+
+  rpc DeleteChunk(DeleteChunkRequest) returns (DeleteChunkResponse);
+
+  rpc ShrinkChunk(ShrinkChunkRequest) returns (ShrinkChunkResponse);
+
+  rpc StatChunk(StatChunkRequest) returns (StatChunkResponse);
+
+  rpc ReadChunk(ReadChunkRequest) returns (stream ReadChunkResponse);
+}
+
+message CreateChunkRequest {
+  bytes writer_key = 1 [(buf.validate.field).required = true];
+  int64 min_tail_slack_length = 2;
+}
+
+message CreateChunkResponse {
+  Chunk chunk = 1;
+  Volume volume = 2;
+}
+
+message PutChunkRequest {
+  oneof request {
+    PutChunkRequestHeader header = 1;
+    PutChunkRequestData data = 2;
+  }
+}
+
+message PutChunkRequestHeader {
+  bytes writer_key = 1 [(buf.validate.field).required = true];
+  int64 min_tail_slack_length = 2;
+  int64 total_data_length = 3;
+}
+
+message PutChunkRequestData {
+  bytes data = 1 [(buf.validate.field).required = true];
+}
+
+message PutChunkResponse {
+  Chunk chunk = 1;
+  Volume volume = 2;
+}
+
+message AppendChunkRequest {
+  oneof request {
+    AppendChunkRequestHeader header = 1;
+    AppendChunkRequestData data = 2;
+  }
+}
+
+message AppendChunkRequestHeader {
+  bytes writer_key = 1 [(buf.validate.field).required = true];
+  uint64 expected_version = 2 [(buf.validate.field).required = true];
+  int64 min_tail_slack_length = 3;
+  int64 total_data_length = 4 [(buf.validate.field).required = true];
+}
+
+message AppendChunkRequestData {
+  bytes data = 1 [(buf.validate.field).required = true];
+}
+
+message AppendChunkResponse {
+  Chunk chunk = 1;
+  Volume volume = 2;
+}
+
+message AppendFromChunkRequest {
+  bytes writer_key = 1 [(buf.validate.field).required = true];
+  uint64 expected_version = 2 [(buf.validate.field).required = true];
+  int64 min_tail_slack_length = 3;
+
+  bytes remote_chunk_id = 4 [(buf.validate.field).required = true];
+  int64 remote_chunk_offset = 5 [(buf.validate.field).required = true];
+  int64 remote_chunk_length = 6 [(buf.validate.field).required = true];
+}
+
+message AppendFromChunkResponse {
+  Chunk chunk = 1;
+  Volume volume = 2;
+}
+
+message DeleteChunkRequest {
+  bytes writer_key = 1 [(buf.validate.field).required = true];
+}
+
+message DeleteChunkResponse {
+  Chunk chunk = 1;
+  Volume volume = 2;
+}
+
+message ShrinkChunkRequest {
+  bytes writer_key = 1 [(buf.validate.field).required = true];
+  uint64 expected_version = 2 [(buf.validate.field).required = true];
+  int64 max_tail_slack_length = 3;
+}
+
+message ShrinkChunkResponse {
+  Chunk chunk = 1;
+  Volume volume = 2;
+}
+
+message StatChunkRequest {
+  bytes chunk_id = 1 [(buf.validate.field).required = true];
+}
+
+message StatChunkResponse {
+  Chunk chunk = 1;
+  Volume volume = 2;
+}
+
+message ReadChunkRequest {
+  bytes chunk_id = 1 [(buf.validate.field).required = true];
+  int64 offset = 2 [(buf.validate.field).required = true];
+  int64 length = 3 [(buf.validate.field).required = true];
+}
+
+message ReadChunkResponse {
+  oneof response {
+    ReadChunkResponseHeader header = 1;
+    ReadChunkResponseData data = 2;
+  }
+}
+
+message ReadChunkResponseHeader {
+  Chunk chunk = 1;
+  Volume volume = 2;
+  int64 total_data_length = 3;
+}
+
+message ReadChunkResponseData {
+  bytes data = 1 [(buf.validate.field).required = true];
+  Volume volume = 2;
+}
