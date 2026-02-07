@@ -44,8 +44,8 @@ func NewTracerProvider(r *resource.Resource, log *zerolog.Logger, lc fx.Lifecycl
 }
 
 func newSpanExporter(ctx context.Context) (sdktrace.SpanExporter, error) {
-	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
-	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	protocol := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL")
+	endpoint := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
 	if endpoint == "" {
 		endpoint = "localhost:4317" // default according to OpenTelemetry spec
 	}
@@ -59,7 +59,7 @@ func newSpanExporter(ctx context.Context) (sdktrace.SpanExporter, error) {
 	case "http/protobuf":
 		return newHTTPSpanExporter(ctx, endpoint)
 	default:
-		return nil, fmt.Errorf("unsupported OTEL_EXPORTER_OTLP_PROTOCOL: %s", protocol)
+		return nil, fmt.Errorf("unsupported OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: %s", protocol)
 	}
 }
 
@@ -68,20 +68,20 @@ func newGRPCSpanExporter(ctx context.Context, endpoint string) (sdktrace.SpanExp
 		otlptracegrpc.WithEndpoint(endpoint),
 	}
 
-	insecureStr := os.Getenv("OTEL_EXPORTER_OTLP_INSECURE")
+	insecureStr := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_INSECURE")
 	if insecureStr == "" {
 		insecureStr = "false"
 	}
 	insecure, err := strconv.ParseBool(strings.ToLower(insecureStr))
 	if err != nil {
-		return nil, fmt.Errorf("invalid OTEL_EXPORTER_OTLP_INSECURE value: %s", insecureStr)
+		return nil, fmt.Errorf("invalid OTEL_EXPORTER_OTLP_TRACES_INSECURE value: %s", insecureStr)
 	}
 
 	if insecure {
 		options = append(options, otlptracegrpc.WithInsecure())
 	}
 
-	// TODO: add support for TLS configuration via OTEL_EXPORTER_OTLP_CERTIFICATE, OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE, OTEL_EXPORTER_OTLP_CLIENT_KEY, etc.
+	// TODO: add support for TLS configuration via OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE, OTEL_EXPORTER_OTLP_TRACES_CLIENT_CERTIFICATE, OTEL_EXPORTER_OTLP_TRACES_CLIENT_KEY, etc.
 
 	return otlptracegrpc.New(ctx, options...)
 }
