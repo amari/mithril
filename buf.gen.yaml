@@ -1,0 +1,37 @@
+version: v2
+clean: true
+plugins:
+  # BSR remote plugin
+  - remote: buf.build/protocolbuffers/go:v1.31.0
+    out: gen/go/proto
+    opt:
+      - paths=source_relative
+  # gRPC Go plugin
+  - remote: buf.build/grpc/go:v1.5.1
+    out: gen/go/proto
+    opt:
+      - paths=source_relative
+  # gRPC Rust plugins
+  - remote: buf.build/community/neoeinstein-prost:v0.4.0
+    out: gen/rust/proto/src
+    opt:
+      - bytes=.
+      - compile_well_known_types
+      - extern_path=.google.protobuf=::pbjson_types
+      - file_descriptor_set
+  - remote: buf.build/community/neoeinstein-prost-serde:v0.3.1
+    out: gen/rust/proto/src
+  - remote: buf.build/community/neoeinstein-tonic:v0.4.1
+    out: gen/rust/proto/src
+    opt:
+      - compile_well_known_types
+      - extern_path=.google.protobuf=::pbjson_types
+  ## Requires the protoc-gen-prost-crate plugin to be installed locally via `cargo install protoc-gen-prost-crate`
+  - local: protoc-gen-prost-crate
+    out: gen/rust/proto
+    strategy: all
+    opt:
+      - gen_crate=./gen/rust/Cargo.proto.toml.tpl
+      - no_features
+inputs:
+  - directory: proto

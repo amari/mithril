@@ -1,0 +1,15 @@
+# For details on buf.yaml configuration, visit https://buf.build/docs/configuration/v2/buf-yaml
+version: v2
+modules:
+  - path: proto
+deps:
+  - buf.build/protocolbuffers/wellknowntypes:v29.1
+  - buf.build/googleapis/googleapis:main
+  - buf.build/bufbuild/protovalidate:main
+lint:
+  use:
+    - STANDARD
+  except: []
+  ignore_only: {}
+  disallow_comment_ignores: false
+breaking: {}
