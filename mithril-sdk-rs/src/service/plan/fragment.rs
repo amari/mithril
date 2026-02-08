@@ -7,7 +7,7 @@ use crate::port::chunk_service::{
 pub struct CreateFragmentPlan<'a> {
     pub role: Role,
     pub write_key: &'a [u8],
-    pub min_tail_slack_size: u64,
+    pub min_tail_slack_length: i64,
 }
 
 /// The result of executing a `CreateFragmentPlan`.
@@ -21,7 +21,7 @@ pub struct PutFragmentPlan<'a> {
     pub role: Role,
     pub write_key: &'a [u8],
     pub payload: &'a [u8],
-    pub min_tail_slack_size: u64,
+    pub min_tail_slack_length: i64,
 }
 
 /// The result of executing a `PutFragmentPlan`.
@@ -35,7 +35,7 @@ pub struct AppendFragmentPlan<'a> {
     pub chunk: &'a Chunk,
     pub fragment: &'a Fragment,
     pub payload: &'a [u8],
-    pub min_tail_slack_size: u64,
+    pub min_tail_slack_length: i64,
 }
 
 /// The result of executing an `AppendFragmentPlan`.

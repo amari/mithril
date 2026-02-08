@@ -150,7 +150,7 @@ pub enum ChunkShrinkTailSlackError {
 pub struct ActualChunkState {
     pub chunk_id: ChunkID,
     pub version: u64,
-    pub size: u64,
+    pub size: i64,
 }
 
 //
@@ -176,14 +176,14 @@ pub trait ChunkService: Send + Sync {
         + 'a;
 
     /// Create a new chunk with the given write key.
-    fn create<'a>(&self, write_key: &'a [u8], min_tail_slack_size: u64) -> Self::CreateFut<'a>;
+    fn create<'a>(&self, write_key: &'a [u8], min_tail_slack_length: i64) -> Self::CreateFut<'a>;
 
     /// Create a new chunk and write the provided payload into it.
     fn put<'a>(
         &self,
         write_key: &'a [u8],
         data: &'a [u8],
-        min_tail_slack_size: u64,
+        min_tail_slack_length: i64,
     ) -> Self::PutFut<'a>;
 
     /// Append data to an existing chunk.
@@ -191,7 +191,7 @@ pub trait ChunkService: Send + Sync {
         &self,
         chunk: &'a Chunk,
         data: &'a [u8],
-        min_tail_slack_size: u64,
+        min_tail_slack_length: i64,
     ) -> Self::AppendFut<'a>;
 
     /// Read data from a chunk into the provided buffer.

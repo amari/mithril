@@ -1,12 +1,13 @@
 use crate::domain::*;
 use crate::port::chunk_service::*;
-use mithril_proto::chunkstore::v1::{CreateChunkRequest, CreateChunkResponse};
+use mithril_proto::mithril::chunk::v1::{CreateChunkRequest, CreateChunkResponse};
 use std::pin::Pin;
 use tonic::transport::Channel;
 
 pub struct GrpcChunkService {
     // FIXME: this should use one `client` per node
-    pub client: mithril_proto::chunkstore::v1::chunk_service_client::ChunkServiceClient<Channel>,
+    pub client:
+        mithril_proto::mithril::chunk::v1::chunk_service_client::ChunkServiceClient<Channel>,
 }
 
 impl ChunkService for GrpcChunkService {
@@ -26,22 +27,24 @@ impl ChunkService for GrpcChunkService {
         Box<dyn Future<Output = Result<ActualChunkState, ChunkShrinkTailSlackError>> + Send + 'a>,
     >;
 
-    fn create<'a>(&self, write_key: &'a [u8], min_tail_slack_size: u64) -> Self::CreateFut<'a> {
+    fn create<'a>(&self, writer_key: &'a [u8], min_tail_slack_length: i64) -> Self::CreateFut<'a> {
         let mut client = self.client.clone();
 
         Box::pin(async move {
-            let write_key = prost::bytes::Bytes::copy_from_slice(write_key);
+            let writer_key = prost::bytes::Bytes::copy_from_slice(writer_key);
 
             // TODO: set timeout
             let resp = client
                 .create_chunk(CreateChunkRequest {
-                    write_key: write_key,
-                    min_tail_slack_size: Some(min_tail_slack_size),
+                    writer_key: writer_key,
+                    min_tail_slack_length: min_tail_slack_length,
                 })
                 .await;
 
             match resp.map(|r| r.into_inner()) {
-                Ok(CreateChunkResponse { chunk: Some(chunk) }) => {
+                Ok(CreateChunkResponse {
+                    chunk: Some(chunk), ..
+                }) => {
                     let chunk_id: ChunkID = chunk
                         .id
                         .as_ref()
@@ -54,7 +57,7 @@ impl ChunkService for GrpcChunkService {
                         size: chunk.size,
                     })
                 }
-                Ok(CreateChunkResponse { chunk: None }) => {
+                Ok(CreateChunkResponse { chunk: None, .. }) => {
                     Err(ChunkCreateError::Internal { actual: None })
                 }
                 Err(status) => {
@@ -71,9 +74,9 @@ impl ChunkService for GrpcChunkService {
 
     fn put<'a>(
         &self,
-        _write_key: &'a [u8],
+        _writer_key: &'a [u8],
         _data: &'a [u8],
-        _min_tail_slack_size: u64,
+        _min_tail_slack_length: i64,
     ) -> Self::PutFut<'a> {
         todo!()
     }
@@ -82,7 +85,7 @@ impl ChunkService for GrpcChunkService {
         &self,
         _chunk: &'a Chunk,
         _data: &'a [u8],
-        _min_tail_slack_size: u64,
+        _min_tail_slack_length: i64,
     ) -> Self::AppendFut<'a> {
         todo!()
     }

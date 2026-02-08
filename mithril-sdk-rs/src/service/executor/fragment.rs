@@ -47,7 +47,7 @@ impl<S: ChunkService> CreateFragmentExecutor for DefaultCreateFragmentExecutor<S
         async move {
             let outcome = self
                 .service
-                .create(plan.write_key, plan.min_tail_slack_size)
+                .create(plan.write_key, plan.min_tail_slack_length)
                 .await;
 
             CreateFragmentResult {
@@ -72,7 +72,7 @@ impl<S: ChunkService> PutFragmentExecutor for DefaultPutFragmentExecutor<S> {
         async move {
             let outcome = self
                 .service
-                .put(plan.write_key, plan.payload, plan.min_tail_slack_size)
+                .put(plan.write_key, plan.payload, plan.min_tail_slack_length)
                 .await;
 
             PutFragmentResult {
@@ -97,7 +97,7 @@ impl<S: ChunkService> AppendFragmentExecutor for DefaultAppendFragmentExecutor<S
         async move {
             let outcome = self
                 .service
-                .append(plan.chunk, plan.payload, plan.min_tail_slack_size)
+                .append(plan.chunk, plan.payload, plan.min_tail_slack_length)
                 .await;
 
             AppendFragmentResult {
