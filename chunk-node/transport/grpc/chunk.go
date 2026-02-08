@@ -373,3 +373,99 @@ func (srv *ChunkServiceServer) StatChunk(ctx context.Context, r *chunkv1.StatChu
 		},
 	}, nil
 }
+
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (n int, err error) {
+	return f(p)
+}
+
+type bodyAppendStream struct {
+	recvFunc func() ([]byte, error)
+	total    int
+
+	buf  []byte
+	read int
+}
+
+func (s *bodyAppendStream) RecvBodyFragment() ([]byte, error) {
+	body, err := s.recvFunc()
+	if err != nil {
+		return nil, err
+	}
+	if body == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "expected body")
+	}
+
+	return body, nil
+}
+
+func (s *bodyAppendStream) Read(p []byte) (n int, err error) {
+	if s.read >= s.total {
+		return 0, io.EOF
+	}
+
+	remaining := s.total - s.read
+	if len(p) > remaining {
+		p = p[:remaining]
+	}
+
+	buf := s.buf
+	read := s.read
+
+	if len(s.buf) > 0 {
+		n = copy(p, buf)
+		buf = buf[n:]
+		p = p[n:]
+
+		read += n
+
+		if len(p) == 0 {
+			s.buf = buf
+			s.read = read
+
+			return n, nil
+		}
+	}
+
+	bodyFragment, err := s.RecvBodyFragment()
+	if err != nil {
+		if n > 0 {
+			s.buf = buf
+			s.read = read
+
+			return n, nil
+		}
+
+		return 0, err
+	}
+
+	if len(bodyFragment) == 0 {
+		s.buf = buf
+		s.read = read
+
+		return n, nil
+	}
+
+	m := copy(p, bodyFragment)
+	bodyFragment = bodyFragment[m:]
+	p = p[m:]
+
+	n += m
+	read += m
+
+	if len(bodyFragment) > 0 {
+		s.buf = bodyFragment
+	} else {
+		s.buf = nil
+	}
+
+	s.buf = buf
+	s.read = read
+
+	if s.read >= s.total {
+		return n, io.EOF
+	}
+
+	return n, nil
+}
