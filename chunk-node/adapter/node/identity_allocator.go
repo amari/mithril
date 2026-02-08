@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
+	"github.com/amari/mithril/chunk-node/nodeerrors"
 	"github.com/amari/mithril/chunk-node/port"
 	"github.com/cenkalti/backoff/v5"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -111,7 +111,7 @@ func (a *IdentityAllocator) AllocateNodeIdentity(ctx context.Context, seed domai
 				if errors.As(err, &netErr) {
 					d := bo.NextBackOff()
 					if d == backoff.Stop {
-						return nil, fmt.Errorf("%w: %w", chunkstoreerrors.ErrNodeIdentityAllocationFailed, err)
+						return nil, fmt.Errorf("%w: %w", nodeerrors.ErrIdentityAllocationFailed, err)
 					}
 
 					select {
@@ -159,10 +159,10 @@ func (a *IdentityAllocator) AllocateNodeIdentity(ctx context.Context, seed domai
 
 func (a *IdentityAllocator) ValidateNodeIdentity(ctx context.Context, identity *domain.NodeIdentity) error {
 	if identity == nil {
-		return chunkstoreerrors.ErrNodeIdentityInvalid
+		return nodeerrors.ErrIdentityInvalid
 	}
 	if len(identity.Proof) != 32 {
-		return chunkstoreerrors.ErrNodeIdentityInvalid
+		return nodeerrors.ErrIdentityInvalid
 	}
 
 	proofStr := base64.StdEncoding.EncodeToString(identity.Proof)
@@ -174,11 +174,11 @@ func (a *IdentityAllocator) ValidateNodeIdentity(ctx context.Context, identity *
 	}
 
 	if len(resp.Kvs) == 0 {
-		return chunkstoreerrors.ErrNodeIdentityNotFound
+		return nodeerrors.ErrIdentityNotFound
 	}
 
 	if !bytes.Equal(resp.Kvs[0].Value, proofStrBytes) {
-		return chunkstoreerrors.ErrNodeIdentityProofMismatch
+		return nodeerrors.ErrIdentityProofMismatch
 	}
 
 	return nil

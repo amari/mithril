@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/volumeerrors"
 	"github.com/rs/zerolog"
 )
 
@@ -57,7 +57,7 @@ func (m *VolumeStatsManager) VolumeStats(ctx context.Context, volumeID domain.Vo
 	m.mu.RUnlock()
 
 	if !exists {
-		return domain.VolumeStats{}, chunkstoreerrors.ErrVolumeNotFound
+		return domain.VolumeStats{}, volumeerrors.ErrNotFound
 	}
 
 	return collector.CollectStats(ctx)
@@ -214,7 +214,7 @@ func (m *VolumeStatsManager) WatchVolume(ctx context.Context, volumeID domain.Vo
 	m.mu.RUnlock()
 
 	if !exists {
-		return nil, chunkstoreerrors.ErrVolumeNotFound
+		return nil, volumeerrors.ErrNotFound
 	}
 
 	// Create subscriber

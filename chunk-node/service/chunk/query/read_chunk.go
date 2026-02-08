@@ -3,11 +3,12 @@ package query
 import (
 	"context"
 
+	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port"
 	"github.com/amari/mithril/chunk-node/port/chunk"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/service/admission"
 	"github.com/amari/mithril/chunk-node/service/volume"
 	"github.com/rs/zerolog"
 )
@@ -22,7 +23,7 @@ type ReadChunkOutput struct {
 	VolumeHealth *domain.VolumeHealth
 
 	Handle                port.Chunk
-	CheckVolumeHealthFunc func() (*domain.VolumeHealth, error)
+	CheckVolumeHealthFunc func() *domain.VolumeHealth
 }
 
 type ReadChunkHandler struct {
@@ -65,12 +66,12 @@ func (h *ReadChunkHandler) HandleReadChunk(ctx context.Context, input *ReadChunk
 			return nil, err
 		}
 	} else {
-		return nil, chunkstoreerrors.ErrChunkNotFound
+		return nil, chunkerrors.ErrNotFound
 	}
 
 	availableChunk, ok := c.AsAvailable()
 	if !ok {
-		return nil, chunkstoreerrors.ErrChunkWrongState
+		return nil, chunkerrors.ErrWrongState
 	}
 
 	volumeID := availableChunk.ChunkID().VolumeID()
@@ -82,18 +83,17 @@ func (h *ReadChunkHandler) HandleReadChunk(ctx context.Context, input *ReadChunk
 		return nil, err
 	}
 
-	// check the volume health before returning the chunk handle
-	// to avoid reading from a failed volume
-	volumeHealth, err := h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ChunkID().VolumeID())
-	if err != nil {
-		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to check volume health")
+	/// check the volume health
+	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID())
 
-		return nil, err
-	}
-	if volumeHealth.State == domain.VolumeStateFailed {
-		zerolog.Ctx(ctx).Error().Msg("volume is in failed state")
-
-		return nil, chunkstoreerrors.ErrVolumeFailed
+	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
+	if err := admission.AdmitReadWithVolumeHealth(ctx, volumeHealth); err != nil {
+		return nil, chunkerrors.WithChunk(
+			err,
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
 	}
 
 	handle, err := vol.Chunks().OpenChunk(ctx, availableChunk.ID)
@@ -107,7 +107,7 @@ func (h *ReadChunkHandler) HandleReadChunk(ctx context.Context, input *ReadChunk
 		Chunk:        availableChunk,
 		VolumeHealth: volumeHealth,
 		Handle:       handle,
-		CheckVolumeHealthFunc: func() (*domain.VolumeHealth, error) {
+		CheckVolumeHealthFunc: func() *domain.VolumeHealth {
 			return h.VolumeHealthChecker.CheckVolumeHealth(volumeID)
 		},
 	}, nil

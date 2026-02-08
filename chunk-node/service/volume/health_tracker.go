@@ -332,7 +332,7 @@ func (t *VolumeHealthTracker) ClearVolumes() {
 }
 
 // CheckVolumeHealth implements VolumeHealthChecker interface.
-func (t *VolumeHealthTracker) CheckVolumeHealth(volumeID domain.VolumeID) (*domain.VolumeHealth, error) {
+func (t *VolumeHealthTracker) CheckVolumeHealth(volumeID domain.VolumeID) *domain.VolumeHealth {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -341,12 +341,12 @@ func (t *VolumeHealthTracker) CheckVolumeHealth(volumeID domain.VolumeID) (*doma
 		// Volume not tracked, return default
 		return &domain.VolumeHealth{
 			State: domain.VolumeStateUnknown,
-		}, nil
+		}
 	}
 
 	return &domain.VolumeHealth{
 		State: state.state,
-	}, nil
+	}
 }
 
 // RecordError records an operation error and potentially transitions state.

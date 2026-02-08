@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port/chunk"
 	portremotechunknode "github.com/amari/mithril/chunk-node/port/remotechunknode"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/service/admission"
 	"github.com/amari/mithril/chunk-node/service/volume"
+	"github.com/amari/mithril/chunk-node/volumeerrors"
 	"github.com/rs/zerolog"
 )
 
@@ -24,26 +27,30 @@ type AppendFromChunkInput struct {
 }
 
 type AppendFromChunkOutput struct {
-	Chunk *domain.AvailableChunk
+	Chunk        *domain.AvailableChunk
+	VolumeHealth *domain.VolumeHealth
 }
 
 type AppendFromChunkHandler struct {
-	Repo              chunk.ChunkRepository
-	VolumeManager     *volume.VolumeManager
-	RemoteChunkClient portremotechunknode.RemoteChunkClient
-	NowFunc           func() time.Time
+	Repo                chunk.ChunkRepository
+	VolumeHealthChecker portvolume.VolumeHealthChecker
+	VolumeManager       *volume.VolumeManager
+	RemoteChunkClient   portremotechunknode.RemoteChunkClient
+	NowFunc             func() time.Time
 }
 
 func NewAppendFromChunkHandler(
 	repo chunk.ChunkRepository,
+	volumeHealthChecker portvolume.VolumeHealthChecker,
 	volumeManager *volume.VolumeManager,
 	remoteChunkClient portremotechunknode.RemoteChunkClient,
 ) *AppendFromChunkHandler {
 	return &AppendFromChunkHandler{
-		Repo:              repo,
-		VolumeManager:     volumeManager,
-		RemoteChunkClient: remoteChunkClient,
-		NowFunc:           time.Now,
+		Repo:                repo,
+		VolumeHealthChecker: volumeHealthChecker,
+		VolumeManager:       volumeManager,
+		RemoteChunkClient:   remoteChunkClient,
+		NowFunc:             time.Now,
 	}
 }
 
@@ -60,62 +67,72 @@ func (h *AppendFromChunkHandler) HandleAppendFromChunk(ctx context.Context, inpu
 
 	availableChunk, ok := c.AsAvailable()
 	if !ok {
-		return nil, fmt.Errorf("%w: chunk with write key %x is not available", errors.ErrChunkWrongState, input.WriteKey)
+		return nil, fmt.Errorf("%w: chunk with write key %x is not available", chunkerrors.ErrWrongState, input.WriteKey)
 	}
 
 	if availableChunk.Version != input.ExpectedVersion {
-		return nil, &errors.ChunkError{
-			Cause: errors.ErrVersionMismatch,
-			Chunk: &errors.Chunk{
-				ID:      availableChunk.ID[:],
-				Version: availableChunk.Version,
-				Size:    availableChunk.Size,
-			},
-		}
+		return nil, chunkerrors.WithChunk(
+			chunkerrors.ErrVersionMismatch,
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
 	}
 
 	vol, err := h.VolumeManager.GetVolumeByID(availableChunk.ID.VolumeID())
 	if err != nil {
 		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to get volume handle")
 
-		return nil, &errors.ChunkError{
-			Cause: err,
-			Chunk: &errors.Chunk{
-				ID:      availableChunk.ID[:],
-				Version: availableChunk.Version,
-				Size:    availableChunk.Size,
-			},
-		}
+		return nil, chunkerrors.WithChunk(
+			err,
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
 	}
 
+	// check the volume health
+	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ChunkID().VolumeID())
+
+	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
+	if err := admission.AdmitWriteWithVolumeHealth(ctx, volumeHealth); err != nil {
+		return nil, chunkerrors.WithChunk(
+			err,
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
+	}
+
+	// read the remote chunk data
 	remoteChunkReader, err := h.RemoteChunkClient.ReadChunkRange(ctx, remoteChunkID, input.RemoteChunkOffset, input.RemoteChunkLength)
 	if err != nil {
 		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to create remote chunk reader")
 
-		return nil, &errors.ChunkError{
-			Cause: err,
-			Chunk: &errors.Chunk{
-				ID:      availableChunk.ID[:],
-				Version: availableChunk.Version,
-				Size:    availableChunk.Size,
-			},
-		}
+		return nil, chunkerrors.WithChunk(
+			err,
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
 	}
 	defer remoteChunkReader.Close()
 
+	// append the remote chunk data to the volume
 	if err := vol.Chunks().AppendChunk(ctx, availableChunk.ID, availableChunk.Size, remoteChunkReader, input.RemoteChunkLength, input.MinTailSlackSize); err != nil {
 		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to append chunk to volume")
 
-		return nil, &errors.ChunkError{
-			Cause: err,
-			Chunk: &errors.Chunk{
-				ID:      availableChunk.ID[:],
-				Version: availableChunk.Version,
-				Size:    availableChunk.Size,
-			},
-		}
+		return nil, chunkerrors.WithChunk(
+			volumeerrors.WithState(
+				err, h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID()).State,
+			),
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
 	}
 
+	// update the available chunk metadata with the new size and version
 	newAvailableChunk := &domain.AvailableChunk{
 		ID:        availableChunk.ID,
 		WriterKey: availableChunk.WriterKey,
@@ -128,17 +145,18 @@ func (h *AppendFromChunkHandler) HandleAppendFromChunk(ctx context.Context, inpu
 	if err := h.Repo.Store(ctx, newAvailableChunk); err != nil {
 		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to store updated available chunk")
 
-		return nil, &errors.ChunkError{
-			Cause: err,
-			Chunk: &errors.Chunk{
-				ID:      availableChunk.ID[:],
-				Version: availableChunk.Version,
-				Size:    availableChunk.Size,
-			},
-		}
+		return nil, chunkerrors.WithChunk(
+			volumeerrors.WithState(
+				err, h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID()).State,
+			),
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
 	}
 
 	return &AppendFromChunkOutput{
-		Chunk: newAvailableChunk,
+		Chunk:        newAvailableChunk,
+		VolumeHealth: h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID()),
 	}, nil
 }

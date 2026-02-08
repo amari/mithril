@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port"
 	"github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/volumeerrors"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
 )
@@ -59,7 +59,7 @@ func (s *VolumeService) AddDirectoryVolume(ctx context.Context, path string, for
 
 	_, _, err = s.directoryExpert.ReadDirectoryVolume(ctx, path)
 	if err != nil {
-		if errors.Is(err, chunkstoreerrors.ErrVolumeNotFormatted) && formatIfNeeded {
+		if errors.Is(err, volumeerrors.ErrNotFormatted) && formatIfNeeded {
 			volumeID, err := s.idAlloc.AllocateVolumeID(ctx)
 			if err != nil {
 				return err

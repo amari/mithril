@@ -16,10 +16,7 @@ func (f *HealthPickFilter) FilterVolumeIDPick(v domain.VolumeID) bool {
 		return true
 	}
 
-	h, err := f.HealthChecker.CheckVolumeHealth(v)
-	if err != nil {
-		return false
-	}
+	h := f.HealthChecker.CheckVolumeHealth(v)
 
 	return h.State == domain.VolumeStateOK
 }

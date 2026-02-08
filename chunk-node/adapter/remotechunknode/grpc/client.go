@@ -2,13 +2,13 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
 	"time"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port/remotechunknode"
 	chunkv1 "github.com/amari/mithril/gen/go/proto/mithril/chunk/v1"
 	"github.com/rs/zerolog"
@@ -161,34 +161,37 @@ func (c *RemoteChunkClient) StatChunk(
 		})
 		if err != nil {
 			// Try to extract and wrap remote error
-			if remoteErr := extractRemoteError(err); remoteErr != nil {
-				// Check if retryable
-				if isRetryableError(remoteErr.ErrorCode) {
-					c.log.Warn().
-						Err(err).
-						Uint32("node_id", uint32(nodeID)).
-						Int32("attempt", attempt).
-						Dur("backoff", backoff).
-						Msg("retryable error stating remote chunk")
+			if err = extractErrorDetails(err); err != nil {
+				var remoteErr *remoteError
+				if errors.As(err, &remoteErr) {
+					// Check if retryable
+					if isRetryableError(remoteErr.ErrorCode) {
+						c.log.Warn().
+							Err(err).
+							Uint32("node_id", uint32(nodeID)).
+							Int32("attempt", attempt).
+							Dur("backoff", backoff).
+							Msg("retryable error stating remote chunk")
 
-					if policy.MaximumAttempts > 0 && attempt >= policy.MaximumAttempts {
-						return nil, nil, fmt.Errorf("exhausted %d retry attempts: %w", attempt, remoteErr)
-					}
-
-					select {
-					case <-time.After(backoff):
-						backoff = time.Duration(float64(backoff) * policy.BackoffCoefficient)
-						if backoff > policy.MaximumInterval {
-							backoff = policy.MaximumInterval
+						if policy.MaximumAttempts > 0 && attempt >= policy.MaximumAttempts {
+							return nil, nil, fmt.Errorf("exhausted %d retry attempts: %w", attempt, remoteErr)
 						}
-						continue
-					case <-ctx.Done():
-						return nil, nil, fmt.Errorf("context canceled during retry: %w", ctx.Err())
+
+						select {
+						case <-time.After(backoff):
+							backoff = time.Duration(float64(backoff) * policy.BackoffCoefficient)
+							if backoff > policy.MaximumInterval {
+								backoff = policy.MaximumInterval
+							}
+							continue
+						case <-ctx.Done():
+							return nil, nil, fmt.Errorf("context canceled during retry: %w", ctx.Err())
+						}
 					}
 				}
 
 				// Non-retryable remote error
-				return nil, nil, remoteErr
+				return nil, nil, err
 			}
 
 			// Check for transient gRPC errors
@@ -316,7 +319,7 @@ func (c *RemoteChunkClient) startStream(
 	})
 	if err != nil {
 		// Try to extract remote error
-		if remoteErr := extractRemoteError(err); remoteErr != nil {
+		if remoteErr := extractErrorDetails(err); remoteErr != nil {
 			return nil, 0, remoteErr
 		}
 		return nil, 0, err
@@ -326,7 +329,7 @@ func (c *RemoteChunkClient) startStream(
 	msg, err := stream.Recv()
 	if err != nil {
 		// Try to extract remote error
-		if remoteErr := extractRemoteError(err); remoteErr != nil {
+		if remoteErr := extractErrorDetails(err); remoteErr != nil {
 			return nil, 0, remoteErr
 		}
 		return nil, 0, fmt.Errorf("failed to receive header: %w", err)
@@ -448,29 +451,25 @@ func (r *retryingStreamReader) Read(p []byte) (n int, err error) {
 			stream, expectedTotal, err := r.client.startStream(r.ctx, r.nodeID, r.chunkID, currentOffset, remainingLength)
 			if err != nil {
 				// Check if error is retryable
-				var remoteErr *chunkstoreerrors.RemoteError
-				if typedErr, ok := err.(*chunkstoreerrors.RemoteError); ok {
-					remoteErr = typedErr
-				} else if remoteExtracted := extractRemoteError(err); remoteExtracted != nil {
-					remoteErr = remoteExtracted
-				}
+				var remoteErr *remoteError
+				if errors.As(err, &remoteErr) {
+					if isRetryableError(remoteErr.ErrorCode) {
+						r.log.Warn().
+							Err(err).
+							Int32("attempt", r.attempt).
+							Dur("backoff", r.backoff).
+							Msg("retryable error starting stream")
 
-				if remoteErr != nil && isRetryableError(remoteErr.ErrorCode) {
-					r.log.Warn().
-						Err(err).
-						Int32("attempt", r.attempt).
-						Dur("backoff", r.backoff).
-						Msg("retryable error starting stream")
-
-					select {
-					case <-time.After(r.backoff):
-						r.backoff = time.Duration(float64(r.backoff) * policy.BackoffCoefficient)
-						if r.backoff > policy.MaximumInterval {
-							r.backoff = policy.MaximumInterval
+						select {
+						case <-time.After(r.backoff):
+							r.backoff = time.Duration(float64(r.backoff) * policy.BackoffCoefficient)
+							if r.backoff > policy.MaximumInterval {
+								r.backoff = policy.MaximumInterval
+							}
+							continue
+						case <-r.ctx.Done():
+							return 0, r.ctx.Err()
 						}
-						continue
-					case <-r.ctx.Done():
-						return 0, r.ctx.Err()
 					}
 				}
 
@@ -532,20 +531,16 @@ func (r *retryingStreamReader) Read(p []byte) (n int, err error) {
 			}
 
 			// Check if error is retryable
-			var remoteErr *chunkstoreerrors.RemoteError
-			if typedErr, ok := err.(*chunkstoreerrors.RemoteError); ok {
-				remoteErr = typedErr
-			} else if remoteExtracted := extractRemoteError(err); remoteExtracted != nil {
-				remoteErr = remoteExtracted
-			}
-
-			if remoteErr != nil && isRetryableError(remoteErr.ErrorCode) {
-				r.log.Warn().
-					Err(err).
-					Int64("bytes_read", r.bytesRead).
-					Msg("retryable error receiving, retrying from current position")
-				r.stream = nil
-				continue
+			var remoteErr *remoteError
+			if errors.As(err, &remoteErr) {
+				if isRetryableError(remoteErr.ErrorCode) {
+					r.log.Warn().
+						Err(err).
+						Int64("bytes_read", r.bytesRead).
+						Msg("retryable error receiving, retrying from current position")
+					r.stream = nil
+					continue
+				}
 			}
 
 			if isTransientGRPCError(err) {

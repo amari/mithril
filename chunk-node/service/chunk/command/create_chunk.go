@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/amari/mithril/chunk-node/adapter/volume/picker"
+	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port"
 	"github.com/amari/mithril/chunk-node/port/chunk"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/service/admission"
 	"github.com/amari/mithril/chunk-node/service/volume"
 )
 
@@ -21,7 +22,8 @@ type CreateChunkInput struct {
 }
 
 type CreateChunkOutput struct {
-	Chunk *domain.AvailableChunk
+	Chunk        *domain.AvailableChunk
+	VolumeHealth *domain.VolumeHealth
 }
 
 type CreateChunkHandler struct {
@@ -58,7 +60,7 @@ func NewCreateChunkHandler(
 
 func (h *CreateChunkHandler) HandleCreateChunk(ctx context.Context, input *CreateChunkInput) (*CreateChunkOutput, error) {
 	chunk, err := h.Repo.GetByWriterKey(ctx, input.WriteKey)
-	if err != nil && !errors.Is(err, chunkstoreerrors.ErrChunkNotFound) {
+	if err != nil && !errors.Is(err, chunkerrors.ErrNotFound) {
 		return nil, err
 	}
 
@@ -95,6 +97,19 @@ func (h *CreateChunkHandler) handleExistingTemp(
 		return nil, err
 	}
 
+	// check the volume health
+	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(c.ChunkID().VolumeID())
+
+	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
+	if err := admission.AdmitWriteWithVolumeHealth(ctx, volumeHealth); err != nil {
+		return nil, chunkerrors.WithChunk(
+			err,
+			c.ID,
+			0,
+			0,
+		)
+	}
+
 	exists, _ := volHandle.Chunks().ChunkExists(ctx, c.ID)
 	if exists {
 		available := &domain.AvailableChunk{
@@ -107,10 +122,15 @@ func (h *CreateChunkHandler) handleExistingTemp(
 		}
 
 		if err := h.Repo.Store(ctx, available); err != nil {
-			return nil, fmt.Errorf("failed to upsert available chunk: %w", err)
+			return nil, chunkerrors.WithChunk(
+				fmt.Errorf("failed to upsert available chunk: %w", err),
+				available.ID,
+				available.Version,
+				available.Size,
+			)
 		}
 
-		return &CreateChunkOutput{Chunk: available}, nil
+		return &CreateChunkOutput{Chunk: available, VolumeHealth: h.VolumeHealthChecker.CheckVolumeHealth(available.ID.VolumeID())}, nil
 	}
 
 	// Recreate temp metadata
@@ -143,7 +163,7 @@ func (h *CreateChunkHandler) handleExistingTemp(
 		return nil, fmt.Errorf("failed to upsert available chunk: %w", err)
 	}
 
-	return &CreateChunkOutput{Chunk: available}, nil
+	return &CreateChunkOutput{Chunk: available, VolumeHealth: h.VolumeHealthChecker.CheckVolumeHealth(available.ID.VolumeID())}, nil
 }
 
 func (h *CreateChunkHandler) createFreshChunk(
@@ -172,6 +192,14 @@ func (h *CreateChunkHandler) createFreshChunk(
 
 	vol, err := h.VolumeManager.GetVolumeByID(volID)
 	if err != nil {
+		return nil, err
+	}
+
+	// check the volume health
+	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(volID)
+
+	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
+	if err := admission.AdmitWriteWithVolumeHealth(ctx, volumeHealth); err != nil {
 		return nil, err
 	}
 
@@ -210,5 +238,5 @@ func (h *CreateChunkHandler) createFreshChunk(
 		return nil, fmt.Errorf("failed to upsert available chunk: %w", err)
 	}
 
-	return &CreateChunkOutput{Chunk: available}, nil
+	return &CreateChunkOutput{Chunk: available, VolumeHealth: h.VolumeHealthChecker.CheckVolumeHealth(available.ID.VolumeID())}, nil
 }

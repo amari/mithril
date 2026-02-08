@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/volumeerrors"
 	"github.com/cockroachdb/pebble/v2"
 )
 
@@ -54,7 +54,7 @@ func (a *pebbleVolumeIDAllocator) AllocateVolumeID(_ context.Context) (domain.Vo
 	nextVolumeID := a.nextVolumeID + 1
 
 	if nextVolumeID > 0xFFFF {
-		return 0, chunkstoreerrors.ErrVolumeIDExhausted
+		return 0, volumeerrors.ErrIDExhausted
 	}
 
 	err := a.db.Set([]byte("next_volume_id"), uint32ToBytes(nextVolumeID), pebble.Sync)

@@ -6,5 +6,5 @@ import (
 
 // VolumeHealthChecker defines the interface for checking the health of a volume.
 type VolumeHealthChecker interface {
-	CheckVolumeHealth(v domain.VolumeID) (*domain.VolumeHealth, error)
+	CheckVolumeHealth(v domain.VolumeID) *domain.VolumeHealth
 }

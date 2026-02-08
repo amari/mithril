@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/volumeerrors"
 )
 
 // PowerOfTwo implements the "Power of Two Choices" volume selection algorithm.
@@ -28,7 +28,7 @@ func (p *PowerOfTwo) PickVolumeID(opts volume.PickVolumeIDOptions) (domain.Volum
 
 	total := len(p.volumeIDSlice)
 	if total == 0 {
-		return 0, chunkstoreerrors.ErrVolumeNotFound
+		return 0, volumeerrors.ErrNotFound
 	}
 
 	// Default probe function
@@ -83,7 +83,7 @@ func (p *PowerOfTwo) PickVolumeID(opts volume.PickVolumeIDOptions) (domain.Volum
 	}
 
 	if first == 0 {
-		return 0, chunkstoreerrors.ErrVolumeNotFound
+		return 0, volumeerrors.ErrNotFound
 	}
 
 	for attempt := range maxAttempts {

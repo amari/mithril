@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port"
 )
 
@@ -28,13 +28,13 @@ func (g *chunkIDGenerator) NextID(nodeID domain.NodeID, volumeID domain.VolumeID
 	defer g.mu.Unlock()
 
 	if now < g.timestamp {
-		return domain.ChunkID{}, chunkstoreerrors.ErrClockRegression
+		return domain.ChunkID{}, chunkerrors.ErrClockRegression
 	}
 
 	if now == g.timestamp {
 		g.sequence++
 		if g.sequence > int64(^uint16(0)) {
-			return domain.ChunkID{}, chunkstoreerrors.ErrSequenceOverflow
+			return domain.ChunkID{}, chunkerrors.ErrSequenceOverflow
 		}
 	} else {
 		g.timestamp = now

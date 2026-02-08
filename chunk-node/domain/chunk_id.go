@@ -39,6 +39,10 @@ func (id ChunkID) Sequence() uint16 {
 	return binary.BigEndian.Uint16(id[14:])
 }
 
+func (id ChunkID) Bytes() []byte {
+	return id[:]
+}
+
 func ParseID(s string) (ChunkID, error) {
 	data, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {

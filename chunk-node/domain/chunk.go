@@ -10,6 +10,8 @@ type Chunk interface {
 	// Common accessors across all states
 	ChunkID() ChunkID
 	ChunkWriterKey() []byte
+	ChunkVersion() uint64
+	ChunkSize() int64
 
 	AsTemp() (*TempChunk, bool)
 	AsAvailable() (*AvailableChunk, bool)
@@ -59,6 +61,14 @@ func (d *DeletedChunk) IsAvailable() bool   { return false }
 func (t *TempChunk) IsDeleted() bool      { return false }
 func (a *AvailableChunk) IsDeleted() bool { return false }
 func (d *DeletedChunk) IsDeleted() bool   { return true }
+
+func (t *TempChunk) ChunkVersion() uint64      { return 0 }
+func (a *AvailableChunk) ChunkVersion() uint64 { return a.Version }
+func (d *DeletedChunk) ChunkVersion() uint64   { return 0 }
+
+func (t *TempChunk) ChunkSize() int64      { return 0 }
+func (a *AvailableChunk) ChunkSize() int64 { return a.Size }
+func (d *DeletedChunk) ChunkSize() int64   { return 0 }
 
 // TempChunk represents an in‑flight write transaction created by
 // CreateChunk or PutChunk. It exists *only* to support idempotency

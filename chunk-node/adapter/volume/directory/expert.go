@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/volumeerrors"
 )
 
 type directoryVolumeExpert struct{}
@@ -36,10 +36,10 @@ func (d *directoryVolumeExpert) FormatDirectoryVolume(ctx context.Context, path 
 		}
 	} else {
 		if !st.Mode().IsRegular() {
-			return chunkstoreerrors.ErrVolumeCorrupted
+			return volumeerrors.ErrCorrupted
 		}
 
-		return chunkstoreerrors.ErrVolumeAlreadyFormatted
+		return volumeerrors.ErrAlreadyFormatted
 	}
 
 	err = os.MkdirAll(dirPath, 0o755)
@@ -106,7 +106,7 @@ func (d *directoryVolumeExpert) ReadDirectoryVolume(ctx context.Context, path st
 	f, err := os.Open(filepath.Join(path, ".mithril.sys", "format.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return 0, 0, chunkstoreerrors.ErrVolumeNotFormatted
+			return 0, 0, volumeerrors.ErrNotFormatted
 		}
 		return 0, 0, err
 	}
@@ -115,7 +115,7 @@ func (d *directoryVolumeExpert) ReadDirectoryVolume(ctx context.Context, path st
 	var format directoryVolumeFormat
 
 	if err := json.NewDecoder(f).Decode(&format); err != nil {
-		return 0, 0, chunkstoreerrors.ErrVolumeCorrupted
+		return 0, 0, volumeerrors.ErrCorrupted
 	}
 
 	return domain.NodeID(format.NodeID), domain.VolumeID(format.VolumeID), nil
@@ -125,7 +125,7 @@ func (d *directoryVolumeExpert) OpenDirectoryVolume(ctx context.Context, path st
 	f, err := os.Open(filepath.Join(path, ".mithril.sys", "format.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, chunkstoreerrors.ErrVolumeNotFormatted
+			return nil, volumeerrors.ErrNotFormatted
 		}
 	}
 	defer f.Close()
@@ -133,11 +133,11 @@ func (d *directoryVolumeExpert) OpenDirectoryVolume(ctx context.Context, path st
 	var format directoryVolumeFormat
 
 	if err := json.NewDecoder(f).Decode(&format); err != nil {
-		return nil, chunkstoreerrors.ErrVolumeCorrupted
+		return nil, volumeerrors.ErrCorrupted
 	}
 
 	if domain.NodeID(format.NodeID) != nodeID {
-		return nil, fmt.Errorf("%w: expected (%08x), actual (%08x)", chunkstoreerrors.ErrVolumeWrongNode, uint32(nodeID), format.NodeID)
+		return nil, fmt.Errorf("%w: expected (%08x), actual (%08x)", volumeerrors.ErrWrongNode, uint32(nodeID), format.NodeID)
 	}
 
 	return NewDirectoryVolume(domain.VolumeID(format.VolumeID), DirectoryVolumeOptions{

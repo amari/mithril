@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/errors"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/service/chunk/command"
 	"github.com/amari/mithril/chunk-node/service/chunk/query"
+	"github.com/amari/mithril/chunk-node/volumeerrors"
 	chunkv1 "github.com/amari/mithril/gen/go/proto/mithril/chunk/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -60,7 +60,7 @@ func (srv *ChunkServiceServer) AppendChunk(ss grpc.ClientStreamingServer[chunkv1
 
 	msg, err := ss.Recv()
 	if err != nil {
-		return mapErrorToStatus(err, domain.VolumeStateUnknown)
+		return err
 	}
 
 	header := msg.GetHeader()
@@ -79,7 +79,7 @@ func (srv *ChunkServiceServer) AppendChunk(ss grpc.ClientStreamingServer[chunkv1
 
 			bodyFragment := msg.GetData()
 			if bodyFragment == nil {
-				return nil, fmt.Errorf("%w: expected body fragment", chunkstoreerrors.ErrWriteSizeMismatch)
+				return nil, fmt.Errorf("%w: expected body fragment", chunkerrors.ErrWriteSizeMismatch)
 			}
 
 			return bodyFragment.GetData(), nil
@@ -96,7 +96,7 @@ func (srv *ChunkServiceServer) AppendChunk(ss grpc.ClientStreamingServer[chunkv1
 	})
 
 	if err != nil {
-		return mapErrorToStatus(err, domain.VolumeStateOK)
+		return mapErrorToStatus(volumeerrors.WithState(err, output.VolumeHealth.State))
 	}
 
 	return ss.SendAndClose(&chunkv1.AppendChunkResponse{
@@ -106,7 +106,7 @@ func (srv *ChunkServiceServer) AppendChunk(ss grpc.ClientStreamingServer[chunkv1
 			Version: output.Chunk.Version,
 		},
 		Volume: &chunkv1.Volume{
-			State: chunkv1.Volume_STATE_OK,
+			State: mapVolumeState(output.VolumeHealth.State),
 		},
 	})
 }
@@ -121,7 +121,7 @@ func (srv *ChunkServiceServer) AppendFromChunk(ctx context.Context, r *chunkv1.A
 		RemoteChunkLength: r.RemoteChunkLength,
 	})
 	if err != nil {
-		return nil, mapErrorToStatus(err, domain.VolumeStateOK)
+		return nil, mapErrorToStatus(err)
 	}
 
 	return &chunkv1.AppendFromChunkResponse{
@@ -131,7 +131,7 @@ func (srv *ChunkServiceServer) AppendFromChunk(ctx context.Context, r *chunkv1.A
 			Version: output.Chunk.Version,
 		},
 		Volume: &chunkv1.Volume{
-			State: chunkv1.Volume_STATE_OK,
+			State: mapVolumeState(output.VolumeHealth.State),
 		},
 	}, nil
 }
@@ -144,7 +144,7 @@ func (srv *ChunkServiceServer) CreateChunk(ctx context.Context, r *chunkv1.Creat
 		MinTailSlackSize: minTailSlackSize,
 	})
 	if err != nil {
-		return nil, mapErrorToStatus(err, domain.VolumeStateOK)
+		return nil, mapErrorToStatus(err)
 	}
 
 	return &chunkv1.CreateChunkResponse{
@@ -154,7 +154,7 @@ func (srv *ChunkServiceServer) CreateChunk(ctx context.Context, r *chunkv1.Creat
 			Version: output.Chunk.Version,
 		},
 		Volume: &chunkv1.Volume{
-			State: chunkv1.Volume_STATE_OK,
+			State: mapVolumeState(output.VolumeHealth.State),
 		},
 	}, nil
 }
@@ -164,7 +164,7 @@ func (srv *ChunkServiceServer) DeleteChunk(ctx context.Context, r *chunkv1.Delet
 		WriteKey: r.WriterKey,
 	})
 	if err != nil {
-		return nil, mapErrorToStatus(err, domain.VolumeStateOK)
+		return nil, mapErrorToStatus(err)
 	}
 
 	return &chunkv1.DeleteChunkResponse{
@@ -174,7 +174,7 @@ func (srv *ChunkServiceServer) DeleteChunk(ctx context.Context, r *chunkv1.Delet
 			Version: 0,
 		},
 		Volume: &chunkv1.Volume{
-			State: chunkv1.Volume_STATE_OK,
+			State: mapVolumeState(output.VolumeHealth.State),
 		},
 	}, nil
 }
@@ -203,7 +203,7 @@ func (srv *ChunkServiceServer) PutChunk(ss grpc.ClientStreamingServer[chunkv1.Pu
 
 			bodyFragment := msg.GetData()
 			if bodyFragment == nil {
-				return nil, fmt.Errorf("%w: expected body fragment", chunkstoreerrors.ErrWriteSizeMismatch)
+				return nil, fmt.Errorf("%w: expected body fragment", chunkerrors.ErrWriteSizeMismatch)
 			}
 
 			return bodyFragment.GetData(), nil
@@ -219,14 +219,12 @@ func (srv *ChunkServiceServer) PutChunk(ss grpc.ClientStreamingServer[chunkv1.Pu
 	})
 
 	if err != nil {
-		return mapErrorToStatus(&chunkstoreerrors.ChunkError{
-			Cause: chunkstoreerrors.ErrOffsetOutOfBounds,
-			Chunk: &errors.Chunk{
-				ID:      output.Chunk.ID[:],
-				Version: output.Chunk.Version,
-				Size:    output.Chunk.Size,
-			},
-		}, domain.VolumeStateOK)
+		return mapErrorToStatus(chunkerrors.WithChunk(
+			volumeerrors.WithState(chunkerrors.ErrOffsetOutOfBounds, output.VolumeHealth.State),
+			output.Chunk.ID,
+			output.Chunk.Version,
+			output.Chunk.Size,
+		))
 	}
 
 	return ss.SendAndClose(&chunkv1.PutChunkResponse{
@@ -236,7 +234,7 @@ func (srv *ChunkServiceServer) PutChunk(ss grpc.ClientStreamingServer[chunkv1.Pu
 			Version: output.Chunk.Version,
 		},
 		Volume: &chunkv1.Volume{
-			State: chunkv1.Volume_STATE_OK,
+			State: mapVolumeState(output.VolumeHealth.State),
 		},
 	})
 }
@@ -246,7 +244,7 @@ func (srv *ChunkServiceServer) ReadChunk(r *chunkv1.ReadChunkRequest, ss grpc.Se
 		ChunkID: r.ChunkId,
 	})
 	if err != nil {
-		return mapErrorToStatus(err, domain.VolumeStateOK)
+		return mapErrorToStatus(err)
 	}
 	defer output.Handle.Close()
 
@@ -255,14 +253,12 @@ func (srv *ChunkServiceServer) ReadChunk(r *chunkv1.ReadChunkRequest, ss grpc.Se
 	end := r.Offset + r.Length
 
 	if start > output.Chunk.Size || end > output.Chunk.Size || start < 0 || end < 0 || start > end {
-		return mapErrorToStatus(&chunkstoreerrors.ChunkError{
-			Cause: chunkstoreerrors.ErrOffsetOutOfBounds,
-			Chunk: &errors.Chunk{
-				ID:      output.Chunk.ID[:],
-				Version: output.Chunk.Version,
-				Size:    output.Chunk.Size,
-			},
-		}, domain.VolumeStateOK)
+		return mapErrorToStatus(chunkerrors.WithChunk(
+			volumeerrors.WithState(chunkerrors.ErrOffsetOutOfBounds, output.VolumeHealth.State),
+			output.Chunk.ID,
+			output.Chunk.Version,
+			output.Chunk.Size,
+		))
 	}
 
 	// write the header
@@ -275,35 +271,24 @@ func (srv *ChunkServiceServer) ReadChunk(r *chunkv1.ReadChunkRequest, ss grpc.Se
 					Version: output.Chunk.Version,
 				},
 				Volume: &chunkv1.Volume{
-					State: chunkv1.Volume_STATE_OK,
+					State: mapVolumeState(output.VolumeHealth.State),
 				},
 				TotalDataLength: end - start,
 			},
 		},
 	})
 	if err != nil {
-		return mapErrorToStatus(&chunkstoreerrors.ChunkError{
-			Cause: err,
-			Chunk: &errors.Chunk{
-				ID:      output.Chunk.ID[:],
-				Version: output.Chunk.Version,
-				Size:    output.Chunk.Size,
-			},
-		}, domain.VolumeStateOK)
+		return err
 	}
 
 	w := bufio.NewWriter(writerFunc(func(p []byte) (int, error) {
-		volumeHealth, err := output.CheckVolumeHealthFunc()
-		if err != nil {
-			return 0, err
-		}
+		volumeHealth := output.CheckVolumeHealthFunc()
+
 		if volumeHealth.State == domain.VolumeStateFailed {
-			return 0, &chunkstoreerrors.VolumeError{
-				Cause: chunkstoreerrors.ErrVolumeFailed,
-				Volume: &errors.Volume{
-					State: chunkstoreerrors.VolumeStateFailed,
-				},
-			}
+			return 0, volumeerrors.WithState(
+				volumeerrors.ErrFailed,
+				volumeerrors.StateFailed,
+			)
 		}
 
 		// send data chunk
@@ -327,27 +312,21 @@ func (srv *ChunkServiceServer) ReadChunk(r *chunkv1.ReadChunkRequest, ss grpc.Se
 	chunkReader, err := output.Handle.NewRangeReader(ss.Context(), start, end-start)
 
 	if err != nil {
-		return mapErrorToStatus(&chunkstoreerrors.ChunkError{
-			Cause: err,
-			Chunk: &errors.Chunk{
-				ID:      output.Chunk.ID[:],
-				Version: output.Chunk.Version,
-				Size:    output.Chunk.Size,
-			},
-		}, domain.VolumeStateOK)
+		return mapErrorToStatus(chunkerrors.WithChunk(
+			volumeerrors.WithState(
+				err,
+				output.CheckVolumeHealthFunc().State,
+			),
+			output.Chunk.ID,
+			output.Chunk.Version,
+			output.Chunk.Size,
+		))
 	}
 	defer chunkReader.Close()
 
 	_, err = io.Copy(w, chunkReader)
 	if err != nil {
-		return mapErrorToStatus(&chunkstoreerrors.ChunkError{
-			Cause: err,
-			Chunk: &errors.Chunk{
-				ID:      output.Chunk.ID[:],
-				Version: output.Chunk.Version,
-				Size:    output.Chunk.Size,
-			},
-		}, domain.VolumeStateOK)
+		return mapErrorToStatus(err)
 	}
 
 	return w.Flush()
@@ -360,7 +339,7 @@ func (srv *ChunkServiceServer) ShrinkChunk(ctx context.Context, r *chunkv1.Shrin
 		MaxTailSlackSize: r.MaxTailSlackLength,
 	})
 	if err != nil {
-		return nil, mapErrorToStatus(err, domain.VolumeStateOK)
+		return nil, mapErrorToStatus(err)
 	}
 
 	return &chunkv1.ShrinkChunkResponse{
@@ -370,7 +349,7 @@ func (srv *ChunkServiceServer) ShrinkChunk(ctx context.Context, r *chunkv1.Shrin
 			Version: output.Chunk.Version,
 		},
 		Volume: &chunkv1.Volume{
-			State: chunkv1.Volume_STATE_OK,
+			State: mapVolumeState(output.VolumeHealth.State),
 		},
 	}, nil
 }
@@ -380,7 +359,7 @@ func (srv *ChunkServiceServer) StatChunk(ctx context.Context, r *chunkv1.StatChu
 		ChunkID: r.ChunkId,
 	})
 	if err != nil {
-		return nil, mapErrorToStatus(err, domain.VolumeStateOK)
+		return nil, mapErrorToStatus(err)
 	}
 
 	return &chunkv1.StatChunkResponse{

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/amari/mithril/chunk-node/adapter/tuple"
+	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port/chunk"
 	"github.com/cockroachdb/pebble/v2"
 )
@@ -47,7 +47,7 @@ func (r *pebbleChunkRepository) getByWriterKey(writerKey []byte, getter interfac
 	value, closer, err := getter.Get(r.chunkByWriteKeyKey(writerKey).Pack())
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, chunkstoreerrors.ErrChunkNotFound
+			return nil, chunkerrors.ErrNotFound
 		}
 
 		return nil, err
@@ -69,7 +69,7 @@ func (r *pebbleChunkRepository) getByID(id domain.ChunkID, getter interface {
 	value, closer, err := getter.Get(r.chunkByIDKey(id).Pack())
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, chunkstoreerrors.ErrChunkNotFound
+			return nil, chunkerrors.ErrNotFound
 		}
 
 		return nil, err
@@ -139,7 +139,7 @@ func (r *pebbleChunkRepository) Get(ctx context.Context, id domain.ChunkID) (dom
 	model, err := r.getByID(id, r.DB)
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, chunkstoreerrors.ErrChunkNotFound
+			return nil, chunkerrors.ErrNotFound
 		}
 
 		return nil, err
@@ -152,7 +152,7 @@ func (r *pebbleChunkRepository) GetByWriterKey(ctx context.Context, writerKey []
 	model, err := r.getByWriterKey(writerKey, r.DB)
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, chunkstoreerrors.ErrChunkNotFound
+			return nil, chunkerrors.ErrNotFound
 		}
 
 		return nil, err

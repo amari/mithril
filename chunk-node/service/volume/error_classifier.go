@@ -7,8 +7,8 @@ import (
 	"os"
 	"syscall"
 
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/unix"
+	"github.com/amari/mithril/chunk-node/volumeerrors"
 )
 
 // VolumeErrorClass categorizes volume errors for health state transitions.
@@ -39,7 +39,7 @@ func classifyVolumeError(err error) VolumeErrorClass {
 	}
 
 	// ENOSPC - no space, degrading but recoverable
-	if errors.Is(err, syscall.ENOSPC) || errors.Is(err, chunkstoreerrors.ErrVolumeNoSpace) {
+	if errors.Is(err, syscall.ENOSPC) || errors.Is(err, volumeerrors.ErrNoSpace) {
 		return VolumeErrorClassDegrading
 	}
 

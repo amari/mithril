@@ -13,8 +13,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port"
 	"github.com/amari/mithril/chunk-node/unix"
 	"github.com/rs/zerolog"
@@ -97,7 +97,7 @@ func (s *directoryChunkStore) OpenChunk(ctx context.Context, id domain.ChunkID) 
 	f, err := s.root.OpenFile(path, os.O_RDONLY, 0o600)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return nil, fmt.Errorf("%w: %s", chunkstoreerrors.ErrChunkNotFound, id.String())
+			return nil, fmt.Errorf("%w: %s", chunkerrors.ErrNotFound, id.String())
 		}
 		return nil, fmt.Errorf("opening chunk file: %w", err)
 	}
@@ -114,7 +114,7 @@ func (s *directoryChunkStore) CreateChunk(ctx context.Context, id domain.ChunkID
 	// does the chunk exist already?
 	_, err := s.root.Stat(path)
 	if err == nil {
-		return fmt.Errorf("%w: %s", chunkstoreerrors.ErrWriterKeyConflict, id.String())
+		return fmt.Errorf("%w: %s", chunkerrors.ErrWriterKeyConflict, id.String())
 	}
 	if !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("checking chunk existence: %w", err)
@@ -168,7 +168,7 @@ func (s *directoryChunkStore) PutChunk(ctx context.Context, id domain.ChunkID, r
 	// does the chunk exist already?
 	_, err := s.root.Stat(firstPath)
 	if err == nil {
-		return fmt.Errorf("%w: %s", chunkstoreerrors.ErrWriterKeyConflict, id.String())
+		return fmt.Errorf("%w: %s", chunkerrors.ErrWriterKeyConflict, id.String())
 	}
 	if !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("checking chunk existence: %w", err)
@@ -176,7 +176,7 @@ func (s *directoryChunkStore) PutChunk(ctx context.Context, id domain.ChunkID, r
 
 	_, err = s.root.Stat(finalPath)
 	if err == nil {
-		return fmt.Errorf("%w: %s", chunkstoreerrors.ErrWriterKeyConflict, id.String())
+		return fmt.Errorf("%w: %s", chunkerrors.ErrWriterKeyConflict, id.String())
 	}
 	if !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("checking chunk existence: %w", err)
@@ -251,7 +251,7 @@ func (s *directoryChunkStore) AppendChunk(ctx context.Context, id domain.ChunkID
 	st, err := s.root.Stat(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("%w: %s", chunkstoreerrors.ErrChunkNotFound, id.String())
+			return fmt.Errorf("%w: %s", chunkerrors.ErrNotFound, id.String())
 		}
 
 		return fmt.Errorf("checking chunk existence: %w", err)
@@ -312,7 +312,7 @@ func (s *directoryChunkStore) DeleteChunk(ctx context.Context, id domain.ChunkID
 		if !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("checking chunk existence: %w", err)
 		}
-		return fmt.Errorf("%w: %s", chunkstoreerrors.ErrChunkNotFound, id.String())
+		return fmt.Errorf("%w: %s", chunkerrors.ErrNotFound, id.String())
 	}
 
 	// create dest directory
@@ -358,7 +358,7 @@ func (s *directoryChunkStore) ShrinkChunkTailSlack(ctx context.Context, id domai
 		if !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("checking chunk existence: %w", err)
 		}
-		return fmt.Errorf("%w: %s", chunkstoreerrors.ErrChunkNotFound, id.String())
+		return fmt.Errorf("%w: %s", chunkerrors.ErrNotFound, id.String())
 	}
 
 	// is shrinking needed?

@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/volumeerrors"
 )
 
 type VolumeManager struct {
@@ -47,7 +47,7 @@ func (m *VolumeManager) GetVolumeByID(id domain.VolumeID) (volume.Volume, error)
 	v, ok := m.volumeMap[id]
 
 	if !ok {
-		return nil, chunkstoreerrors.ErrVolumeNotFound
+		return nil, volumeerrors.ErrNotFound
 	}
 
 	return v, nil

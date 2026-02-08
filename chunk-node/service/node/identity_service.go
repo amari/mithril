@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
+	"github.com/amari/mithril/chunk-node/nodeerrors"
 	"github.com/amari/mithril/chunk-node/port"
 	"github.com/rs/zerolog"
 )
@@ -38,7 +38,7 @@ func (s *NodeIdentityService) BootstrapNodeIdentity(ctx context.Context) error {
 
 	nodeIdentity, err := s.Repo.LoadNodeIdentity(ctx)
 	if err != nil {
-		if !errors.Is(err, chunkstoreerrors.ErrNodeIdentityNotFound) {
+		if !errors.Is(err, nodeerrors.ErrIdentityNotFound) {
 			return err
 		}
 	}
@@ -48,7 +48,7 @@ func (s *NodeIdentityService) BootstrapNodeIdentity(ctx context.Context) error {
 
 		seed, err := s.SeedRepo.LoadNodeSeed(ctx)
 		if err != nil {
-			if !errors.Is(err, chunkstoreerrors.ErrNodeSeedNotFound) {
+			if !errors.Is(err, nodeerrors.ErrSeedNotFound) {
 				return err
 			}
 		}

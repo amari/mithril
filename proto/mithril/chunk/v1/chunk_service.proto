@@ -22,6 +22,10 @@ message Volume {
   State state = 1;
 }
 
+message Node {
+  uint32 id = 1;
+}
+
 message ErrorDetails {
   ErrorCode code = 1;
   // Local/target chunk
@@ -32,6 +36,8 @@ message ErrorDetails {
   optional Chunk remote_chunk = 4;
   // Remote/source volume (for cross-node ops)
   optional Volume remote_volume = 5;
+  // Remote/source node (for cross-node ops)
+  optional Node remote_node = 6;
 }
 
 enum ErrorCode {

@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"github.com/amari/mithril/chunk-node/adapter/volume/picker"
+	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port"
 	"github.com/amari/mithril/chunk-node/port/chunk"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/service/admission"
 	"github.com/amari/mithril/chunk-node/service/volume"
 )
 
@@ -24,7 +25,8 @@ type PutChunkInput struct {
 }
 
 type PutChunkOutput struct {
-	Chunk *domain.AvailableChunk
+	Chunk        *domain.AvailableChunk
+	VolumeHealth *domain.VolumeHealth
 }
 
 type PutChunkHandler struct {
@@ -61,7 +63,7 @@ func NewPutChunkHandler(
 
 func (h *PutChunkHandler) HandlePutChunk(ctx context.Context, input *PutChunkInput) (*PutChunkOutput, error) {
 	chunk, err := h.Repo.GetByWriterKey(ctx, input.WriteKey)
-	if err != nil && !errors.Is(err, chunkstoreerrors.ErrChunkNotFound) {
+	if err != nil && !errors.Is(err, chunkerrors.ErrNotFound) {
 		return nil, err
 	}
 
@@ -96,6 +98,19 @@ func (h *PutChunkHandler) handleExistingTemp(
 	volHandle, err := h.VolumeManager.GetVolumeByID(c.ID.VolumeID())
 	if err != nil {
 		return nil, err
+	}
+
+	// check the volume health
+	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(c.ChunkID().VolumeID())
+
+	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
+	if err := admission.AdmitWriteWithVolumeHealth(ctx, volumeHealth); err != nil {
+		return nil, chunkerrors.WithChunk(
+			err,
+			c.ChunkID(),
+			c.ChunkVersion(),
+			c.ChunkSize(),
+		)
 	}
 
 	exists, _ := volHandle.Chunks().ChunkExists(ctx, c.ID)
@@ -170,6 +185,14 @@ func (h *PutChunkHandler) createFreshChunk(
 		),
 	})
 	if err != nil {
+		return nil, err
+	}
+
+	// check the volume health
+	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(vol)
+
+	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
+	if err := admission.AdmitWriteWithVolumeHealth(ctx, volumeHealth); err != nil {
 		return nil, err
 	}
 

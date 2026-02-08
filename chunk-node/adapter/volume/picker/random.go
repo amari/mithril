@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreeerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/volumeerrors"
 )
 
 // Random implements a volume scheduler that selects volumes randomly.
@@ -26,7 +26,7 @@ func (r *Random) PickVolumeID(opts volume.PickVolumeIDOptions) (domain.VolumeID,
 
 	total := len(r.volumeIDSlice)
 	if total == 0 {
-		return 0, chunkstoreeerrors.ErrVolumeNotFound
+		return 0, volumeerrors.ErrNotFound
 	}
 
 	// Default probe function
@@ -64,7 +64,7 @@ func (r *Random) PickVolumeID(opts volume.PickVolumeIDOptions) (domain.VolumeID,
 		return vol, nil
 	}
 
-	return 0, chunkstoreeerrors.ErrVolumeNotFound
+	return 0, volumeerrors.ErrNotFound
 }
 
 func (r *Random) SetVolumeIDs(volumeIDs []domain.VolumeID) {

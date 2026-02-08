@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/volumeerrors"
 )
 
 // RoundRobin implements a volume picker that selects volumes in a round-robin fashion.
@@ -24,7 +24,7 @@ func (rr *RoundRobin) PickVolumeID(opts volume.PickVolumeIDOptions) (domain.Volu
 
 	total := len(rr.volumeIDSlice)
 	if total == 0 {
-		return 0, chunkstoreerrors.ErrVolumeNotFound
+		return 0, volumeerrors.ErrNotFound
 	}
 
 	// Default probe function
@@ -57,7 +57,7 @@ func (rr *RoundRobin) PickVolumeID(opts volume.PickVolumeIDOptions) (domain.Volu
 		return vol, nil
 	}
 
-	return 0, chunkstoreerrors.ErrVolumeNotFound
+	return 0, volumeerrors.ErrNotFound
 }
 
 func (rr *RoundRobin) SetVolumeIDs(vols []domain.VolumeID) {

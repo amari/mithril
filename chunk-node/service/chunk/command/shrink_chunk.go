@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
 	"github.com/amari/mithril/chunk-node/port/chunk"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
+	"github.com/amari/mithril/chunk-node/service/admission"
 	"github.com/amari/mithril/chunk-node/service/volume"
 	"github.com/rs/zerolog"
 )
@@ -19,23 +21,27 @@ type ShrinkChunkInput struct {
 }
 
 type ShrinkChunkOutput struct {
-	Chunk *domain.AvailableChunk
+	Chunk        *domain.AvailableChunk
+	VolumeHealth *domain.VolumeHealth
 }
 
 type ShrinkChunkHandler struct {
-	Repo          chunk.ChunkRepository
-	VolumeManager *volume.VolumeManager
-	NowFunc       func() time.Time
+	Repo                chunk.ChunkRepository
+	VolumeHealthChecker portvolume.VolumeHealthChecker
+	VolumeManager       *volume.VolumeManager
+	NowFunc             func() time.Time
 }
 
 func NewShrinkChunkHandler(
 	repo chunk.ChunkRepository,
+	volumeHealthChecker portvolume.VolumeHealthChecker,
 	volumeManager *volume.VolumeManager,
 ) *ShrinkChunkHandler {
 	return &ShrinkChunkHandler{
-		Repo:          repo,
-		VolumeManager: volumeManager,
-		NowFunc:       time.Now,
+		Repo:                repo,
+		VolumeHealthChecker: volumeHealthChecker,
+		VolumeManager:       volumeManager,
+		NowFunc:             time.Now,
 	}
 }
 
@@ -47,11 +53,11 @@ func (h *ShrinkChunkHandler) HandleShrinkChunk(ctx context.Context, input *Shrin
 
 	availableChunk, ok := chunk.AsAvailable()
 	if !ok {
-		return nil, fmt.Errorf("%w: chunk with write key %x is not available", chunkstoreerrors.ErrChunkWrongState, input.WriteKey)
+		return nil, fmt.Errorf("%w: chunk with write key %x is not available", chunkerrors.ErrWrongState, input.WriteKey)
 	}
 
 	if availableChunk.Version != input.ExpectedVersion {
-		return nil, chunkstoreerrors.ErrVersionMismatch
+		return nil, chunkerrors.ErrVersionMismatch
 	}
 
 	vol, err := h.VolumeManager.GetVolumeByID(availableChunk.ID.VolumeID())
@@ -61,6 +67,19 @@ func (h *ShrinkChunkHandler) HandleShrinkChunk(ctx context.Context, input *Shrin
 		return nil, err
 	}
 
+	// check the volume health
+	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID())
+
+	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
+	if err := admission.AdmitWriteWithVolumeHealth(ctx, volumeHealth); err != nil {
+		return nil, chunkerrors.WithChunk(
+			err,
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
+	}
+
 	if err := vol.Chunks().ShrinkChunkTailSlack(ctx, availableChunk.ID, availableChunk.Size, input.MaxTailSlackSize); err != nil {
 		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to shrink chunk tail slack")
 
@@ -68,6 +87,7 @@ func (h *ShrinkChunkHandler) HandleShrinkChunk(ctx context.Context, input *Shrin
 	}
 
 	return &ShrinkChunkOutput{
-		Chunk: availableChunk,
+		Chunk:        availableChunk,
+		VolumeHealth: h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID()),
 	}, nil
 }

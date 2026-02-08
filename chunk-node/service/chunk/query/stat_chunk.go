@@ -3,9 +3,8 @@ package query
 import (
 	"context"
 
+	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
-	"github.com/amari/mithril/chunk-node/port"
 	"github.com/amari/mithril/chunk-node/port/chunk"
 	"github.com/amari/mithril/chunk-node/port/volume"
 )
@@ -18,8 +17,6 @@ type StatChunkInput struct {
 type StatChunkOutput struct {
 	Chunk        *domain.AvailableChunk
 	VolumeHealth *domain.VolumeHealth
-
-	Handle port.Chunk
 }
 
 type StatChunkHandler struct {
@@ -59,18 +56,15 @@ func (h *StatChunkHandler) HandleStatChunk(ctx context.Context, input *StatChunk
 			return nil, err
 		}
 	} else {
-		return nil, chunkstoreerrors.ErrWriterKeyMismatch
+		return nil, chunkerrors.ErrWriterKeyMismatch
 	}
 
 	availableChunk, ok := c.AsAvailable()
 	if !ok {
-		return nil, chunkstoreerrors.ErrChunkWrongState
+		return nil, chunkerrors.ErrWrongState
 	}
 
-	volumeHealth, err := h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ChunkID().VolumeID())
-	if err != nil {
-		return nil, err
-	}
+	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ChunkID().VolumeID())
 
 	return &StatChunkOutput{
 		Chunk:        availableChunk,

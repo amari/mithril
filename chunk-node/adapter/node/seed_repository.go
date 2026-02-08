@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
+	"github.com/amari/mithril/chunk-node/nodeerrors"
 	"github.com/amari/mithril/chunk-node/port"
 )
 
@@ -32,7 +32,7 @@ func (r *fileBackedNodeSeedRepository) LoadNodeSeed(ctx context.Context) (domain
 	f, err := os.Open(r.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, chunkstoreerrors.ErrNodeSeedNotFound
+			return nil, nodeerrors.ErrSeedNotFound
 		}
 
 		return nil, err

@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	chunkstoreerrors "github.com/amari/mithril/chunk-node/errors"
+	"github.com/amari/mithril/chunk-node/nodeerrors"
 	"github.com/amari/mithril/chunk-node/port"
 )
 
@@ -38,7 +38,7 @@ func (r *fileBackedNodeIdentityRepository) LoadNodeIdentity(ctx context.Context)
 	f, err := os.Open(r.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, chunkstoreerrors.ErrNodeIdentityNotFound
+			return nil, nodeerrors.ErrIdentityNotFound
 		}
 
 		return nil, err
