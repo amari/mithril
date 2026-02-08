@@ -11,6 +11,7 @@ import (
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/service/admission"
 	"github.com/amari/mithril/chunk-node/service/volume"
+	"github.com/amari/mithril/chunk-node/volumeerrors"
 	"github.com/rs/zerolog"
 )
 
@@ -57,14 +58,24 @@ func (h *ShrinkChunkHandler) HandleShrinkChunk(ctx context.Context, input *Shrin
 	}
 
 	if availableChunk.Version != input.ExpectedVersion {
-		return nil, chunkerrors.ErrVersionMismatch
+		return nil, chunkerrors.WithChunk(
+			volumeerrors.WithState(chunkerrors.ErrVersionMismatch, h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID()).State),
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
 	}
 
 	vol, err := h.VolumeManager.GetVolumeByID(availableChunk.ID.VolumeID())
 	if err != nil {
 		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to get volume handle")
 
-		return nil, err
+		return nil, chunkerrors.WithChunk(
+			err,
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
 	}
 
 	// check the volume health
@@ -83,7 +94,12 @@ func (h *ShrinkChunkHandler) HandleShrinkChunk(ctx context.Context, input *Shrin
 	if err := vol.Chunks().ShrinkChunkTailSlack(ctx, availableChunk.ID, availableChunk.Size, input.MaxTailSlackSize); err != nil {
 		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to shrink chunk tail slack")
 
-		return nil, err
+		return nil, chunkerrors.WithChunk(
+			volumeerrors.WithState(err, h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID()).State),
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
 	}
 
 	return &ShrinkChunkOutput{
