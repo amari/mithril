@@ -96,7 +96,7 @@ func (srv *ChunkServiceServer) AppendChunk(ss grpc.ClientStreamingServer[chunkv1
 	})
 
 	if err != nil {
-		return mapErrorToStatus(volumeerrors.WithState(err, output.VolumeHealth.State))
+		return mapErrorToStatus(err)
 	}
 
 	return ss.SendAndClose(&chunkv1.AppendChunkResponse{
@@ -219,12 +219,7 @@ func (srv *ChunkServiceServer) PutChunk(ss grpc.ClientStreamingServer[chunkv1.Pu
 	})
 
 	if err != nil {
-		return mapErrorToStatus(chunkerrors.WithChunk(
-			volumeerrors.WithState(chunkerrors.ErrOffsetOutOfBounds, output.VolumeHealth.State),
-			output.Chunk.ID,
-			output.Chunk.Version,
-			output.Chunk.Size,
-		))
+		return mapErrorToStatus(err)
 	}
 
 	return ss.SendAndClose(&chunkv1.PutChunkResponse{
@@ -455,9 +450,9 @@ func (s *bodyAppendStream) Read(p []byte) (n int, err error) {
 	read += m
 
 	if len(bodyFragment) > 0 {
-		s.buf = bodyFragment
+		buf = bodyFragment
 	} else {
-		s.buf = nil
+		buf = nil
 	}
 
 	s.buf = buf

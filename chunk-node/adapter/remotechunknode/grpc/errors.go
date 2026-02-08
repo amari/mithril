@@ -45,7 +45,7 @@ func extractErrorDetails(err error) error {
 
 			// Extract remote chunk state (from remote fields in remote error)
 			if errDetails.Chunk != nil {
-				err = chunkerrors.WithRemoteChunk(err, errDetails.RemoteChunk.Id, errDetails.RemoteChunk.Version, errDetails.RemoteChunk.Size)
+				err = chunkerrors.WithRemoteChunk(err, domain.ChunkID(errDetails.RemoteChunk.Id), errDetails.RemoteChunk.Version, errDetails.RemoteChunk.Size)
 			}
 
 			// Extract volume state (from local fields in remote error)

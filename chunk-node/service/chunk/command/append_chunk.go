@@ -62,7 +62,7 @@ func (h *AppendChunkHandler) HandleAppendChunk(ctx context.Context, input *Appen
 
 	if availableChunk.Version != input.ExpectedVersion {
 		return nil, chunkerrors.WithChunk(
-			chunkerrors.ErrVersionMismatch,
+			volumeerrors.WithState(chunkerrors.ErrVersionMismatch, h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID()).State),
 			availableChunk.ID,
 			availableChunk.Version,
 			availableChunk.Size,

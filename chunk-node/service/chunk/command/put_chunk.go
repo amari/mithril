@@ -86,7 +86,7 @@ func (h *PutChunkHandler) HandlePutChunk(ctx context.Context, input *PutChunkInp
 }
 
 func (h *PutChunkHandler) handleExistingAvailable(c *domain.AvailableChunk) (*PutChunkOutput, error) {
-	return &PutChunkOutput{Chunk: c}, nil
+	return &PutChunkOutput{Chunk: c, VolumeHealth: h.VolumeHealthChecker.CheckVolumeHealth(c.ID.VolumeID())}, nil
 }
 
 func (h *PutChunkHandler) handleExistingTemp(
@@ -128,7 +128,7 @@ func (h *PutChunkHandler) handleExistingTemp(
 			return nil, fmt.Errorf("failed to upsert available chunk: %w", err)
 		}
 
-		return &PutChunkOutput{Chunk: available}, nil
+		return &PutChunkOutput{Chunk: available, VolumeHealth: h.VolumeHealthChecker.CheckVolumeHealth(available.ID.VolumeID())}, nil
 	}
 
 	// Recreate temp metadata
@@ -161,7 +161,7 @@ func (h *PutChunkHandler) handleExistingTemp(
 		return nil, fmt.Errorf("failed to upsert available chunk: %w", err)
 	}
 
-	return &PutChunkOutput{Chunk: available}, nil
+	return &PutChunkOutput{Chunk: available, VolumeHealth: h.VolumeHealthChecker.CheckVolumeHealth(available.ID.VolumeID())}, nil
 }
 
 func (h *PutChunkHandler) createFreshChunk(
@@ -236,5 +236,5 @@ func (h *PutChunkHandler) createFreshChunk(
 		return nil, fmt.Errorf("failed to upsert available chunk: %w", err)
 	}
 
-	return &PutChunkOutput{Chunk: available}, nil
+	return &PutChunkOutput{Chunk: available, VolumeHealth: h.VolumeHealthChecker.CheckVolumeHealth(available.ID.VolumeID())}, nil
 }

@@ -90,6 +90,7 @@ func (h *DeleteChunkHandler) HandleDeleteChunk(ctx context.Context, input *Delet
 	}
 
 	return &DeleteChunkOutput{
-		Chunk: deletedChunk,
+		Chunk:        deletedChunk,
+		VolumeHealth: h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID()),
 	}, nil
 }

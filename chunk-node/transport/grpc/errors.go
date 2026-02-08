@@ -116,7 +116,7 @@ func mapErrorToStatus(err error) error {
 	var remoteChunkError *chunkerrors.RemoteChunkError
 	if errors.As(err, &remoteChunkError) {
 		details.RemoteChunk = &chunkv1.Chunk{
-			Id:      remoteChunkError.RemoteChunkID(),
+			Id:      remoteChunkError.RemoteChunkID().Bytes(),
 			Version: remoteChunkError.RemoteChunkVersion(),
 			Size:    remoteChunkError.RemoteChunkSize(),
 		}

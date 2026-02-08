@@ -86,7 +86,7 @@ func (h *ReadChunkHandler) HandleReadChunk(ctx context.Context, input *ReadChunk
 	/// check the volume health
 	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID())
 
-	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
+	// perform admission control check before reading from the volume to avoid reading from a volume that is not healthy enough to accept reads
 	if err := admission.AdmitReadWithVolumeHealth(ctx, volumeHealth); err != nil {
 		return nil, chunkerrors.WithChunk(
 			err,

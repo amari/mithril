@@ -1,13 +1,15 @@
 package chunkerrors
 
+import "github.com/amari/mithril/chunk-node/domain"
+
 type RemoteChunkError struct {
 	err     error
-	id      []byte
+	id      domain.ChunkID
 	version uint64
 	size    int64
 }
 
-func WithRemoteChunk(err error, id []byte, version uint64, size int64) error {
+func WithRemoteChunk(err error, id domain.ChunkID, version uint64, size int64) error {
 	return &RemoteChunkError{
 		err:     err,
 		id:      id,
@@ -24,7 +26,7 @@ func (e *RemoteChunkError) Unwrap() error {
 	return e.err
 }
 
-func (e *RemoteChunkError) RemoteChunkID() []byte {
+func (e *RemoteChunkError) RemoteChunkID() domain.ChunkID {
 	return e.id
 }
 
