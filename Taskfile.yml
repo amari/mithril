@@ -33,6 +33,14 @@ tasks:
     deps: [proto-generate]
     cmds:
       - go test ./chunk-node/...
+  go-coverage:
+    desc: Generate Go code coverage report using temp files
+    deps: [proto-generate]
+    vars:
+      COVER_OUT: { sh: mktemp }
+    cmds:
+      - go test -coverprofile={{.COVER_OUT}} -coverpkg=./... ./chunk-node/...
+      - go-better-html-coverage -profile {{.COVER_OUT}} -o {{.COVER_OUT}}.html
   go-clean:
     desc: Run Go clean
     cmds:
@@ -50,6 +58,10 @@ tasks:
     desc: Run Rust tests
     cmds:
       - cargo test --workspace
+  rust-coverage:
+    desc: Generate Rust code coverage report
+    cmds:
+      - cargo llvm-cov --html --open --workspace
   rust-clean:
     desc: Clean Rust build artifacts
     cmds:
