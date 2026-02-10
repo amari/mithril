@@ -243,6 +243,12 @@ func (m *VolumeStatsManager) unsubscribe(monitor *statsMonitor, sub *subscriber)
 	monitor.subMu.Lock()
 	defer monitor.subMu.Unlock()
 
+	// Check if subscriber still exists - it may have already been removed
+	// and its channel closed by RemoveVolume or ClearVolumes
+	if _, exists := monitor.subscribers[sub]; !exists {
+		return
+	}
+
 	delete(monitor.subscribers, sub)
 	close(sub.ch)
 }
