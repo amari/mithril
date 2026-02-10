@@ -19,7 +19,7 @@ type VolumeHealthTracker struct {
 	statsManager      *VolumeStatsManager
 	attributeRegistry portvolume.VolumeAttributeRegistry
 	log               *zerolog.Logger
-	now               func() time.Time
+	nowFunc           func() time.Time
 
 	// OTel metrics
 	healthStateGauge       metric.Int64Gauge
@@ -85,6 +85,7 @@ func NewVolumeHealthTracker(
 	attributeRegistry portvolume.VolumeAttributeRegistry,
 	meter metric.Meter,
 	log *zerolog.Logger,
+	nowFunc func() time.Time,
 ) (*VolumeHealthTracker, error) {
 	// Create OTel metrics
 	healthStateGauge, err := meter.Int64Gauge("volume.health.state",
@@ -133,7 +134,7 @@ func NewVolumeHealthTracker(
 		statsManager:           statsManager,
 		attributeRegistry:      attributeRegistry,
 		log:                    log,
-		now:                    time.Now,
+		nowFunc:                nowFunc,
 		healthStateGauge:       healthStateGauge,
 		transitionsCounter:     transitionsCounter,
 		operationErrorsCounter: operationErrorsCounter,
@@ -227,7 +228,7 @@ func (t *VolumeHealthTracker) AddVolume(volumeID domain.VolumeID, config HealthC
 	state := &volumeHealthState{
 		state:          domain.VolumeStateOK,
 		config:         config,
-		lastTransition: t.now(),
+		lastTransition: t.nowFunc(),
 	}
 	t.states[volumeID] = state
 
@@ -285,7 +286,7 @@ func (t *VolumeHealthTracker) RemoveVolume(volumeID domain.VolumeID) error {
 
 	// Record time spent in final state
 	if state != nil {
-		duration := t.now().Sub(state.lastTransition)
+		duration := t.nowFunc().Sub(state.lastTransition)
 		t.recordTimeInState(volumeID, state.state, duration)
 	}
 
@@ -316,7 +317,7 @@ func (t *VolumeHealthTracker) ClearVolumes() {
 	t.mu.Unlock()
 
 	// Record time in state for all volumes
-	now := t.now()
+	now := t.nowFunc()
 	for vid, state := range states {
 		duration := now.Sub(state.lastTransition)
 		t.recordTimeInState(vid, state.state, duration)
@@ -421,22 +422,22 @@ func (t *VolumeHealthTracker) RecordSuccess(ctx context.Context, volumeID domain
 
 		// Check recovery criteria
 		if state.successCount >= state.config.RecoverySuccessCount &&
-			time.Since(state.lastTransition) >= state.config.RecoveryWindow {
+			t.nowFunc().Sub(state.lastTransition) >= state.config.RecoveryWindow {
 
 			t.log.Info().
 				Uint16("volume_id", uint16(volumeID)).
 				Int("success_count", state.successCount).
-				Dur("recovery_duration", time.Since(state.lastTransition)).
+				Dur("recovery_duration", t.nowFunc().Sub(state.lastTransition)).
 				Msg("volume recovered from degraded state")
 
 			// Record time in degraded state
-			duration := t.now().Sub(state.lastTransition)
+			duration := t.nowFunc().Sub(state.lastTransition)
 			t.recordTimeInState(volumeID, domain.VolumeStateDegraded, duration)
 
 			// Transition to OK
 			oldState := state.state
 			state.state = domain.VolumeStateOK
-			state.lastTransition = t.now()
+			state.lastTransition = t.nowFunc()
 			state.successCount = 0
 
 			// Record transition
@@ -530,7 +531,7 @@ func (t *VolumeHealthTracker) updateHealthFromStats(volumeID domain.VolumeID, st
 		if currentSample.Epoch > lastSample.Epoch &&
 			!currentSample.Time.After(lastSample.Time) {
 
-			staleDuration := t.now().Sub(currentSample.Time)
+			staleDuration := t.nowFunc().Sub(currentSample.Time)
 			epochsStuck := currentSample.Epoch - lastSample.Epoch
 
 			// Record stuck epochs metric
@@ -553,12 +554,12 @@ func (t *VolumeHealthTracker) updateHealthFromStats(volumeID domain.VolumeID, st
 					Msg("volume degraded due to stuck statfs")
 
 				// Record time in OK state
-				duration := t.now().Sub(state.lastTransition)
+				duration := t.nowFunc().Sub(state.lastTransition)
 				t.recordTimeInState(volumeID, domain.VolumeStateOK, duration)
 
 				oldState := state.state
 				state.state = domain.VolumeStateDegraded
-				state.lastTransition = t.now()
+				state.lastTransition = t.nowFunc()
 
 				// Record transition
 				t.recordStateTransition(volumeID, oldState, domain.VolumeStateDegraded)
@@ -581,7 +582,7 @@ func (t *VolumeHealthTracker) updateHealthFromStats(volumeID domain.VolumeID, st
 		if currentSample.Epoch > lastSample.Epoch &&
 			!currentSample.Time.After(lastSample.Time) {
 
-			staleDuration := t.now().Sub(currentSample.Time)
+			staleDuration := t.nowFunc().Sub(currentSample.Time)
 			epochsStuck := currentSample.Epoch - lastSample.Epoch
 
 			// Record stuck epochs metric
@@ -604,12 +605,12 @@ func (t *VolumeHealthTracker) updateHealthFromStats(volumeID domain.VolumeID, st
 					Msg("volume degraded due to stuck block device stats")
 
 				// Record time in OK state
-				duration := t.now().Sub(state.lastTransition)
+				duration := t.nowFunc().Sub(state.lastTransition)
 				t.recordTimeInState(volumeID, domain.VolumeStateOK, duration)
 
 				oldState := state.state
 				state.state = domain.VolumeStateDegraded
-				state.lastTransition = t.now()
+				state.lastTransition = t.nowFunc()
 
 				// Record transition
 				t.recordStateTransition(volumeID, oldState, domain.VolumeStateDegraded)
@@ -653,31 +654,31 @@ func (t *VolumeHealthTracker) updateHealthFromStats(volumeID domain.VolumeID, st
 						Msg("volume degraded due to high space usage")
 
 					// Record time in OK state
-					duration := t.now().Sub(state.lastTransition)
+					duration := t.nowFunc().Sub(state.lastTransition)
 					t.recordTimeInState(volumeID, domain.VolumeStateOK, duration)
 
 					oldState := state.state
 					state.state = domain.VolumeStateDegraded
-					state.lastTransition = t.now()
+					state.lastTransition = t.nowFunc()
 
 					// Record transition
 					t.recordStateTransition(volumeID, oldState, domain.VolumeStateDegraded)
 				}
 			} else if usageRatio < state.config.SpaceUsageThreshold-0.05 {
 				// Space usage dropped below threshold with hysteresis → may recover
-				if state.state == domain.VolumeStateDegraded && time.Since(state.lastTransition) > state.config.RecoveryWindow {
+				if state.state == domain.VolumeStateDegraded && t.nowFunc().Sub(state.lastTransition) > state.config.RecoveryWindow {
 					t.log.Info().
 						Uint16("volume_id", uint16(volumeID)).
 						Float64("usage", usageRatio).
 						Msg("volume recovered from space-based degradation")
 
 					// Record time in degraded state
-					duration := t.now().Sub(state.lastTransition)
+					duration := t.nowFunc().Sub(state.lastTransition)
 					t.recordTimeInState(volumeID, domain.VolumeStateDegraded, duration)
 
 					oldState := state.state
 					state.state = domain.VolumeStateOK
-					state.lastTransition = t.now()
+					state.lastTransition = t.nowFunc()
 
 					// Record transition
 					t.recordStateTransition(volumeID, oldState, domain.VolumeStateOK)
@@ -715,12 +716,12 @@ func (t *VolumeHealthTracker) updateHealthFromStats(volumeID domain.VolumeID, st
 					Msg("volume degraded due to high latency")
 
 				// Record time in OK state
-				duration := t.now().Sub(state.lastTransition)
+				duration := t.nowFunc().Sub(state.lastTransition)
 				t.recordTimeInState(volumeID, domain.VolumeStateOK, duration)
 
 				oldState := state.state
 				state.state = domain.VolumeStateDegraded
-				state.lastTransition = t.now()
+				state.lastTransition = t.nowFunc()
 
 				// Record transition
 				t.recordStateTransition(volumeID, oldState, domain.VolumeStateDegraded)
@@ -743,12 +744,12 @@ func (t *VolumeHealthTracker) handleFatalError(volumeID domain.VolumeID, state *
 				Msg("volume failed due to fatal errors")
 
 			// Record time in previous state
-			duration := t.now().Sub(state.lastTransition)
+			duration := t.nowFunc().Sub(state.lastTransition)
 			t.recordTimeInState(volumeID, state.state, duration)
 
 			oldState := state.state
 			state.state = domain.VolumeStateFailed
-			state.lastTransition = t.now()
+			state.lastTransition = t.nowFunc()
 
 			// Record transition
 			t.recordStateTransition(volumeID, oldState, domain.VolumeStateFailed)
@@ -770,12 +771,12 @@ func (t *VolumeHealthTracker) handleDegradingError(volumeID domain.VolumeID, sta
 			Msg("volume degraded due to errors")
 
 		// Record time in OK state
-		duration := t.now().Sub(state.lastTransition)
+		duration := t.nowFunc().Sub(state.lastTransition)
 		t.recordTimeInState(volumeID, domain.VolumeStateOK, duration)
 
 		oldState := state.state
 		state.state = domain.VolumeStateDegraded
-		state.lastTransition = t.now()
+		state.lastTransition = t.nowFunc()
 		state.errorCount = 0 // Reset for next threshold check
 
 		// Record transition

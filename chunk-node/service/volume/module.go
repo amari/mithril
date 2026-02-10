@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/amari/mithril/chunk-node/port"
 	"github.com/amari/mithril/chunk-node/port/volume"
@@ -44,7 +45,7 @@ func Module(directoryVolumePaths []string) fx.Option {
 			log *zerolog.Logger,
 			lc fx.Lifecycle,
 		) (*VolumeHealthTracker, volume.VolumeHealthChecker, error) {
-			healthTracker, err := NewVolumeHealthTracker(statsManager, attributeRegistry, meter, log)
+			healthTracker, err := NewVolumeHealthTracker(statsManager, attributeRegistry, meter, log, time.Now)
 			if err != nil {
 				return nil, nil, err
 			}
