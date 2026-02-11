@@ -23,6 +23,7 @@ type VolumeService struct {
 
 	// Health and stats management
 	healthTracker *VolumeHealthTracker
+	labelManager  *VolumeLabelManager
 	statsManager  *VolumeStatsManager
 	log           *zerolog.Logger
 }
@@ -35,6 +36,7 @@ func NewVolumeService(
 	picker volume.VolumePicker,
 	attributeRegistry volume.VolumeAttributeRegistry,
 	healthTracker *VolumeHealthTracker,
+	labelManager *VolumeLabelManager,
 	statsManager *VolumeStatsManager,
 	log *zerolog.Logger,
 ) *VolumeService {
@@ -46,6 +48,7 @@ func NewVolumeService(
 		picker:            picker,
 		attributeRegistry: attributeRegistry,
 		healthTracker:     healthTracker,
+		labelManager:      labelManager,
 		statsManager:      statsManager,
 		log:               log,
 	}
@@ -80,6 +83,13 @@ func (s *VolumeService) AddDirectoryVolume(ctx context.Context, path string, for
 	}
 
 	volumeID := vol.ID()
+
+	// Collect volume labels
+	if err := s.labelManager.AddDirectoryVolume(volumeID, path); err != nil {
+		// Failed to setup labels, close volume and fail
+		vol.Close()
+		return err
+	}
 
 	// Start stats monitoring - must succeed
 	pollInterval := 10 * time.Second // TODO: make configurable
@@ -131,6 +141,11 @@ func (s *VolumeService) CloseAllVolumes(ctx context.Context) error {
 
 		// Clean up attributes
 		s.attributeRegistry.RemoveAllAttributes(id)
+
+		// Stop label collection
+		if err := s.labelManager.RemoveVolume(id); err != nil {
+			errs = append(errs, err)
+		}
 
 		// Stop stats monitoring
 		if err := s.statsManager.RemoveVolume(id); err != nil {

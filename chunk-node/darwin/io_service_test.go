@@ -7,27 +7,27 @@ import "testing"
 
 func TestCloseIOService_NullService(t *testing.T) {
 	// Closing a null service should not return an error
-	err := closeIOService(0)
+	err := CloseIOService(0)
 	if err != nil {
-		t.Errorf("closeIOService(0) returned error: %v", err)
+		t.Errorf("CloseIOService(0) returned error: %v", err)
 	}
 }
 
 func TestGetIOServiceClassName(t *testing.T) {
 	// Get a real service to test with
-	media, err := getIOMediaFromBSDName("disk0")
+	media, err := GetIOMediaFromBSDName("disk0")
 	if err != nil {
-		t.Fatalf("getIOMediaFromBSDName(\"disk0\") failed: %v", err)
+		t.Fatalf("GetIOMediaFromBSDName(\"disk0\") failed: %v", err)
 	}
-	defer closeIOService(media)
+	defer CloseIOService(media)
 
-	className, err := getIOServiceClassName(media)
+	className, err := GetIOServiceClassName(media)
 	if err != nil {
-		t.Fatalf("getIOServiceClassName() returned error: %v", err)
+		t.Fatalf("GetIOServiceClassName() returned error: %v", err)
 	}
 
 	if className == "" {
-		t.Error("getIOServiceClassName() returned empty string")
+		t.Error("GetIOServiceClassName() returned empty string")
 	}
 
 	// IOMedia services should have a class name containing "IOMedia"
@@ -39,23 +39,23 @@ func TestGetIOServiceClassName_MultipleDisks(t *testing.T) {
 	diskNames := []string{"disk0", "disk1", "disk0s1"}
 
 	for _, diskName := range diskNames {
-		media, err := getIOMediaFromBSDName(diskName)
+		media, err := GetIOMediaFromBSDName(diskName)
 		if err != nil {
 			// Skip disks that don't exist
 			t.Logf("Skipping %s: %v", diskName, err)
 			continue
 		}
 
-		className, err := getIOServiceClassName(media)
-		closeIOService(media)
+		className, err := GetIOServiceClassName(media)
+		CloseIOService(media)
 
 		if err != nil {
-			t.Errorf("getIOServiceClassName() for %s returned error: %v", diskName, err)
+			t.Errorf("GetIOServiceClassName() for %s returned error: %v", diskName, err)
 			continue
 		}
 
 		if className == "" {
-			t.Errorf("getIOServiceClassName() for %s returned empty string", diskName)
+			t.Errorf("GetIOServiceClassName() for %s returned empty string", diskName)
 			continue
 		}
 
@@ -65,57 +65,57 @@ func TestGetIOServiceClassName_MultipleDisks(t *testing.T) {
 
 func TestCloseIOService_ValidService(t *testing.T) {
 	// Get a real service
-	media, err := getIOMediaFromBSDName("disk0")
+	media, err := GetIOMediaFromBSDName("disk0")
 	if err != nil {
-		t.Fatalf("getIOMediaFromBSDName(\"disk0\") failed: %v", err)
+		t.Fatalf("GetIOMediaFromBSDName(\"disk0\") failed: %v", err)
 	}
 
 	// Close it - should not return an error
-	err = closeIOService(media)
+	err = CloseIOService(media)
 	if err != nil {
-		t.Errorf("closeIOService() returned error: %v", err)
+		t.Errorf("CloseIOService() returned error: %v", err)
 	}
 }
 
 func TestCloseIOService_DoubleClose(t *testing.T) {
 	// Get a real service
-	media, err := getIOMediaFromBSDName("disk0")
+	media, err := GetIOMediaFromBSDName("disk0")
 	if err != nil {
-		t.Fatalf("getIOMediaFromBSDName(\"disk0\") failed: %v", err)
+		t.Fatalf("GetIOMediaFromBSDName(\"disk0\") failed: %v", err)
 	}
 
 	// Close it twice - second close should be safe (on null service)
-	err = closeIOService(media)
+	err = CloseIOService(media)
 	if err != nil {
-		t.Errorf("First closeIOService() returned error: %v", err)
+		t.Errorf("First CloseIOService() returned error: %v", err)
 	}
 
 	// Note: After the first close, media is released but the variable still holds
-	// the old value. In production code, we set it to IO_OBJECT_NULL after release.
+	// the old value. In production code, we set it to IOObjectNull after release.
 	// For this test, we just verify that closing a null service is safe.
-	err = closeIOService(0)
+	err = CloseIOService(0)
 	if err != nil {
-		t.Errorf("closeIOService(0) returned error: %v", err)
+		t.Errorf("CloseIOService(0) returned error: %v", err)
 	}
 }
 
 // Benchmark tests
 
 func BenchmarkGetIOServiceClassName(b *testing.B) {
-	media, err := getIOMediaFromBSDName("disk0")
+	media, err := GetIOMediaFromBSDName("disk0")
 	if err != nil {
-		b.Fatalf("getIOMediaFromBSDName(\"disk0\") failed: %v", err)
+		b.Fatalf("GetIOMediaFromBSDName(\"disk0\") failed: %v", err)
 	}
-	defer closeIOService(media)
+	defer CloseIOService(media)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = getIOServiceClassName(media)
+		_, _ = GetIOServiceClassName(media)
 	}
 }
 
 func BenchmarkCloseIOService_Null(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_ = closeIOService(0)
+		_ = CloseIOService(0)
 	}
 }

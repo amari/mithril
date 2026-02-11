@@ -32,6 +32,13 @@ func Module(directoryVolumePaths []string) fx.Option {
 	return fx.Module("service.volume",
 		fx.Provide(NewVolumeManager),
 		fx.Provide(NewVolumeAttributeRegistry),
+		fx.Provide(func(log *zerolog.Logger, lc fx.Lifecycle) (*VolumeLabelManager, portvolume.VolumeLabelProvider) {
+			labelManager := NewVolumeLabelManager(log)
+
+			lc.Append(fx.StopHook(labelManager.ClearVolumes))
+
+			return labelManager, labelManager
+		}),
 		fx.Provide(func(log *zerolog.Logger, lc fx.Lifecycle) (*VolumeStatsManager, portvolume.VolumeStatsProvider) {
 			statsManager := NewVolumeStatsManager(log)
 
@@ -53,8 +60,8 @@ func Module(directoryVolumePaths []string) fx.Option {
 
 			return healthTracker, healthTracker, nil
 		}),
-		fx.Provide(func(nodeIdentityRepo port.NodeIdentityRepository, idAlloc volume.VolumeIDAllocator, directoryExpert volume.DirectoryVolumeExpert, volumeManager *VolumeManager, volumePicker volume.VolumePicker, volumeAttributeRegistry volume.VolumeAttributeRegistry, healthTracker *VolumeHealthTracker, statsManager *VolumeStatsManager, log *zerolog.Logger, lc fx.Lifecycle) *VolumeService {
-			svc := NewVolumeService(nodeIdentityRepo, idAlloc, directoryExpert, volumeManager, volumePicker, volumeAttributeRegistry, healthTracker, statsManager, log)
+		fx.Provide(func(nodeIdentityRepo port.NodeIdentityRepository, idAlloc volume.VolumeIDAllocator, directoryExpert volume.DirectoryVolumeExpert, volumeManager *VolumeManager, volumePicker volume.VolumePicker, volumeAttributeRegistry volume.VolumeAttributeRegistry, healthTracker *VolumeHealthTracker, labelManager *VolumeLabelManager, statsManager *VolumeStatsManager, log *zerolog.Logger, lc fx.Lifecycle) *VolumeService {
+			svc := NewVolumeService(nodeIdentityRepo, idAlloc, directoryExpert, volumeManager, volumePicker, volumeAttributeRegistry, healthTracker, labelManager, statsManager, log)
 
 			lc.Append(fx.StopHook(svc.CloseAllVolumes))
 

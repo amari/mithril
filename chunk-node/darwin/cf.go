@@ -13,6 +13,7 @@ import (
 	"unsafe"
 )
 
+// CFNumber converts a CFNumberRef to a Go numeric type.
 func CFNumber(number C.CFNumberRef) (any, error) {
 	switch C.CFNumberGetType(number) {
 	case C.kCFNumberSInt8Type:
@@ -42,6 +43,7 @@ func CFNumber(number C.CFNumberRef) (any, error) {
 	return nil, fmt.Errorf("failed to convert CFNumber to Go number")
 }
 
+// CFString converts a CFStringRef to a Go string.
 func CFString(str C.CFStringRef) (string, error) {
 	if uintptr(str) == 0 {
 		return "", nil
@@ -59,6 +61,7 @@ func CFString(str C.CFStringRef) (string, error) {
 	return C.GoString(&buf[0]), nil
 }
 
+// CFType converts a CFTypeRef to a Go type.
 func CFType(v C.CFTypeRef) (any, error) {
 	if uintptr(v) == 0 {
 		return nil, nil
@@ -80,6 +83,7 @@ func CFType(v C.CFTypeRef) (any, error) {
 	}
 }
 
+// CFData converts a CFDataRef to a Go byte slice.
 func CFData(data C.CFDataRef) ([]byte, error) {
 	if uintptr(data) == 0 {
 		return nil, nil
@@ -96,6 +100,7 @@ func CFData(data C.CFDataRef) ([]byte, error) {
 	return buf, nil
 }
 
+// CFArray converts a CFArrayRef to a Go slice.
 func CFArray(array C.CFArrayRef) ([]any, error) {
 	count := C.CFArrayGetCount(array)
 	result := make([]any, count)
@@ -112,6 +117,7 @@ func CFArray(array C.CFArrayRef) ([]any, error) {
 	return result, nil
 }
 
+// CFDictionary converts a CFDictionaryRef to a Go map.
 func CFDictionary(dict C.CFDictionaryRef) (map[string]any, error) {
 	result := make(map[string]any)
 

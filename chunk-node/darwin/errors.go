@@ -12,6 +12,9 @@ import "C"
 
 import "errors"
 
+// KernReturn is a type alias for kern_return_t error codes.
+type KernReturn = C.kern_return_t
+
 // Sentinel Go errors corresponding 1:1 with IOKit error constants.
 var (
 	ErrIOReturnError            = errors.New("kIOReturnError")
@@ -62,7 +65,7 @@ var (
 )
 
 // Map of kern_return_t → Go error.
-var iokitErrors = map[C.kern_return_t]error{
+var iokitErrors = map[KernReturn]error{
 	C.kIOReturnError:            ErrIOReturnError,
 	C.kIOReturnNoMemory:         ErrIOReturnNoMemory,
 	C.kIOReturnNoResources:      ErrIOReturnNoResources,
@@ -110,8 +113,8 @@ var iokitErrors = map[C.kern_return_t]error{
 	C.kIOReturnNoCompletion:     ErrIOReturnNoCompletion,
 }
 
-// errorFromKernReturn converts a kern_return_t into a Go error.
-func errorFromKernReturn(kr C.kern_return_t) error {
+// ErrorFromKernReturn converts a kern_return_t into a Go error.
+func ErrorFromKernReturn(kr KernReturn) error {
 	if kr == C.KERN_SUCCESS {
 		return nil
 	}

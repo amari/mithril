@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	iokit "github.com/amari/mithril/chunk-node/darwin"
 	"github.com/rs/zerolog"
 )
 
@@ -197,13 +198,14 @@ func TestIOKitBlockDeviceStatsCollector_CloseStopsPollLoop(t *testing.T) {
 	// Wait for some polling to occur
 	time.Sleep(100 * time.Millisecond)
 
-	sample1, _ := collector.CollectVolumeStats()
-	epoch1 := sample1.Epoch
-
-	// Close the collector
+	// Close the collector - this waits for the poll loop to exit
 	if err := collector.Close(); err != nil {
 		t.Errorf("Close() returned error: %v", err)
 	}
+
+	// Capture epoch immediately after close
+	sample1, _ := collector.CollectVolumeStats()
+	epoch1 := sample1.Epoch
 
 	// Wait and verify epoch doesn't change anymore
 	time.Sleep(100 * time.Millisecond)
@@ -403,55 +405,55 @@ func TestIOKitBlockDeviceStatsCollector_SampleValid(t *testing.T) {
 	}
 }
 
-// Test error sentinel values
+// Test error sentinel values from shared iokit package
 func TestIOKitErrors(t *testing.T) {
 	// Verify error sentinel values are properly defined
 	sentinels := []error{
-		ErrIOReturnError,
-		ErrIOReturnNoMemory,
-		ErrIOReturnNoResources,
-		ErrIOReturnIPCError,
-		ErrIOReturnNoDevice,
-		ErrIOReturnNotPrivileged,
-		ErrIOReturnBadArgument,
-		ErrIOReturnLockedRead,
-		ErrIOReturnLockedWrite,
-		ErrIOReturnExclusiveAccess,
-		ErrIOReturnBadMessageID,
-		ErrIOReturnUnsupported,
-		ErrIOReturnVMError,
-		ErrIOReturnInternalError,
-		ErrIOReturnIOError,
-		ErrIOReturnCannotLock,
-		ErrIOReturnNotOpen,
-		ErrIOReturnNotReadable,
-		ErrIOReturnNotWritable,
-		ErrIOReturnNotAligned,
-		ErrIOReturnBadMedia,
-		ErrIOReturnStillOpen,
-		ErrIOReturnRLDError,
-		ErrIOReturnDMAError,
-		ErrIOReturnBusy,
-		ErrIOReturnTimeout,
-		ErrIOReturnOffline,
-		ErrIOReturnNotReady,
-		ErrIOReturnNotAttached,
-		ErrIOReturnNoChannels,
-		ErrIOReturnNoSpace,
-		ErrIOReturnPortExists,
-		ErrIOReturnCannotWire,
-		ErrIOReturnNoInterrupt,
-		ErrIOReturnNoFrames,
-		ErrIOReturnMessageTooLarge,
-		ErrIOReturnNotPermitted,
-		ErrIOReturnNoPower,
-		ErrIOReturnNoMedia,
-		ErrIOReturnUnformattedMedia,
-		ErrIOReturnUnsupportedMode,
-		ErrIOReturnUnderrun,
-		ErrIOReturnOverrun,
-		ErrIOReturnDeviceError,
-		ErrIOReturnNoCompletion,
+		iokit.ErrIOReturnError,
+		iokit.ErrIOReturnNoMemory,
+		iokit.ErrIOReturnNoResources,
+		iokit.ErrIOReturnIPCError,
+		iokit.ErrIOReturnNoDevice,
+		iokit.ErrIOReturnNotPrivileged,
+		iokit.ErrIOReturnBadArgument,
+		iokit.ErrIOReturnLockedRead,
+		iokit.ErrIOReturnLockedWrite,
+		iokit.ErrIOReturnExclusiveAccess,
+		iokit.ErrIOReturnBadMessageID,
+		iokit.ErrIOReturnUnsupported,
+		iokit.ErrIOReturnVMError,
+		iokit.ErrIOReturnInternalError,
+		iokit.ErrIOReturnIOError,
+		iokit.ErrIOReturnCannotLock,
+		iokit.ErrIOReturnNotOpen,
+		iokit.ErrIOReturnNotReadable,
+		iokit.ErrIOReturnNotWritable,
+		iokit.ErrIOReturnNotAligned,
+		iokit.ErrIOReturnBadMedia,
+		iokit.ErrIOReturnStillOpen,
+		iokit.ErrIOReturnRLDError,
+		iokit.ErrIOReturnDMAError,
+		iokit.ErrIOReturnBusy,
+		iokit.ErrIOReturnTimeout,
+		iokit.ErrIOReturnOffline,
+		iokit.ErrIOReturnNotReady,
+		iokit.ErrIOReturnNotAttached,
+		iokit.ErrIOReturnNoChannels,
+		iokit.ErrIOReturnNoSpace,
+		iokit.ErrIOReturnPortExists,
+		iokit.ErrIOReturnCannotWire,
+		iokit.ErrIOReturnNoInterrupt,
+		iokit.ErrIOReturnNoFrames,
+		iokit.ErrIOReturnMessageTooLarge,
+		iokit.ErrIOReturnNotPermitted,
+		iokit.ErrIOReturnNoPower,
+		iokit.ErrIOReturnNoMedia,
+		iokit.ErrIOReturnUnformattedMedia,
+		iokit.ErrIOReturnUnsupportedMode,
+		iokit.ErrIOReturnUnderrun,
+		iokit.ErrIOReturnOverrun,
+		iokit.ErrIOReturnDeviceError,
+		iokit.ErrIOReturnNoCompletion,
 	}
 
 	for _, sentinel := range sentinels {
@@ -464,13 +466,13 @@ func TestIOKitErrors(t *testing.T) {
 	}
 
 	// Test errors.Is
-	wrappedErr := errors.New("wrapped: " + ErrIOReturnNoDevice.Error())
-	if errors.Is(wrappedErr, ErrIOReturnNoDevice) {
+	wrappedErr := errors.New("wrapped: " + iokit.ErrIOReturnNoDevice.Error())
+	if errors.Is(wrappedErr, iokit.ErrIOReturnNoDevice) {
 		t.Error("errors.Is should not match for different error with same message")
 	}
 
 	// Test that sentinel errors are distinct
-	if errors.Is(ErrIOReturnNoDevice, ErrIOReturnError) {
+	if errors.Is(iokit.ErrIOReturnNoDevice, iokit.ErrIOReturnError) {
 		t.Error("Different sentinel errors should not match")
 	}
 }

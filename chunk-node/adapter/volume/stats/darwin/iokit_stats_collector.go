@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	iokit "github.com/amari/mithril/chunk-node/darwin"
 	"github.com/amari/mithril/chunk-node/domain"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/rs/zerolog"
@@ -20,7 +21,7 @@ type IOKitBlockDeviceStatsCollector struct {
 	path    string
 	log     *zerolog.Logger
 	nowFunc func() time.Time
-	driver  *IOBlockStorageDriver
+	driver  *iokit.IOBlockStorageDriver
 
 	mu           sync.RWMutex
 	epoch        uint64
@@ -43,7 +44,7 @@ func NewIOKitBlockDeviceStatsCollector(
 	nowFunc func() time.Time,
 ) (*IOKitBlockDeviceStatsCollector, error) {
 	// Resolve path → IOMedia → IOBlockStorageDriver
-	media, err := IOMediaFromPath(path)
+	media, err := iokit.IOMediaFromPath(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get IOMedia from path: %w", err)
 	}
@@ -51,7 +52,7 @@ func NewIOKitBlockDeviceStatsCollector(
 
 	log.Debug().Str("bsdName", media.BSDName()).Msg("Resolved IOMedia from path")
 
-	driver, err := media.GetBlockStorageDriver()
+	driver, err := iokit.GetBlockStorageDriverFromMedia(media)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get IOBlockStorageDriver: %w", err)
 	}

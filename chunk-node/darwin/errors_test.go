@@ -242,7 +242,7 @@ func TestErrorSentinels_ContainKIOReturnPrefix(t *testing.T) {
 
 func TestErrorFromKernReturn_NoDevice(t *testing.T) {
 	// Test by attempting to get a non-existent device
-	_, err := getIOMediaFromBSDName("nonexistent_disk_xyz123")
+	_, err := GetIOMediaFromBSDName("nonexistent_disk_xyz123")
 	if err == nil {
 		t.Fatal("Expected error for non-existent disk")
 	}
@@ -254,11 +254,11 @@ func TestErrorFromKernReturn_NoDevice(t *testing.T) {
 
 func TestErrorFromKernReturn_Success(t *testing.T) {
 	// Test by getting a real device - should not return error
-	media, err := getIOMediaFromBSDName("disk0")
+	media, err := GetIOMediaFromBSDName("disk0")
 	if err != nil {
 		t.Skipf("Skipping test - disk0 not available: %v", err)
 	}
-	closeIOService(media)
+	CloseIOService(media)
 	// If we get here, no error was returned for success case
 }
 
@@ -282,7 +282,7 @@ func TestIokitErrorsMapLength(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		_, err := getIOMediaFromBSDName(tc.diskName)
+		_, err := GetIOMediaFromBSDName(tc.diskName)
 		if tc.expectError && err == nil {
 			t.Errorf("Expected error for disk %q but got nil", tc.diskName)
 		}

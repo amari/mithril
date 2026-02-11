@@ -10,24 +10,24 @@ import (
 
 func TestGetIOMediaFromBSDName(t *testing.T) {
 	// Test with a disk that should exist on all macOS systems
-	media, err := getIOMediaFromBSDName("disk0")
+	media, err := GetIOMediaFromBSDName("disk0")
 	if err != nil {
-		t.Errorf("getIOMediaFromBSDName(\"disk0\") failed: %v", err)
+		t.Errorf("GetIOMediaFromBSDName(\"disk0\") failed: %v", err)
 	}
 	if media == 0 {
-		t.Error("getIOMediaFromBSDName(\"disk0\") returned nil media")
+		t.Error("GetIOMediaFromBSDName(\"disk0\") returned nil media")
 	}
 
 	// Test with a non-existent disk to catch failure cases
-	media, err = getIOMediaFromBSDName("disk999999")
+	media, err = GetIOMediaFromBSDName("disk999999")
 	if err == nil {
-		t.Error("getIOMediaFromBSDName(\"disk999999\") should have failed but didn't")
+		t.Error("GetIOMediaFromBSDName(\"disk999999\") should have failed but didn't")
 	}
 	if !errors.Is(err, ErrIOReturnNoDevice) {
-		t.Errorf("getIOMediaFromBSDName(\"disk999999\") should return ErrIOReturnNoDevice, got: %v", err)
+		t.Errorf("GetIOMediaFromBSDName(\"disk999999\") should return ErrIOReturnNoDevice, got: %v", err)
 	}
 	if media != 0 {
-		t.Error("getIOMediaFromBSDName(\"disk999999\") should have returned 0 media")
+		t.Error("GetIOMediaFromBSDName(\"disk999999\") should have returned 0 media")
 	}
 }
 
@@ -79,24 +79,27 @@ func TestIOMediaFromPath_NonExistent(t *testing.T) {
 	}
 }
 
-func TestIOMedia_GetBlockStorageDriver(t *testing.T) {
+func TestIOMedia_Service(t *testing.T) {
 	media, err := IOMediaFromBSDName("disk0")
 	if err != nil {
 		t.Fatalf("IOMediaFromBSDName(\"disk0\") failed: %v", err)
 	}
 	defer media.Close()
 
-	driver, err := media.GetBlockStorageDriver()
-	if err != nil {
-		t.Fatalf("GetBlockStorageDriver() failed: %v", err)
+	service := media.Service()
+	if service == IOObjectNull {
+		t.Error("Service() returned IOObjectNull")
 	}
-	defer driver.Close()
 
-	className := driver.ClassName()
-	if className == "" {
-		t.Error("ClassName() returned empty string")
+	// Verify we can get the class name from the service
+	className, err := GetIOServiceClassName(service)
+	if err != nil {
+		t.Fatalf("GetIOServiceClassName() failed: %v", err)
 	}
-	t.Logf("Block storage driver class name: %s", className)
+	if className == "" {
+		t.Error("GetIOServiceClassName() returned empty string")
+	}
+	t.Logf("IOMedia class name: %s", className)
 }
 
 func TestIOMedia_Close(t *testing.T) {
@@ -116,6 +119,26 @@ func TestIOMedia_Close(t *testing.T) {
 	}
 }
 
+func TestIOMedia_GetBlockStorageDriver(t *testing.T) {
+	media, err := IOMediaFromBSDName("disk0")
+	if err != nil {
+		t.Fatalf("IOMediaFromBSDName(\"disk0\") failed: %v", err)
+	}
+	defer media.Close()
+
+	driver, err := GetBlockStorageDriverFromMedia(media)
+	if err != nil {
+		t.Fatalf("GetBlockStorageDriverFromMedia() failed: %v", err)
+	}
+	defer driver.Close()
+
+	className := driver.ClassName()
+	if className == "" {
+		t.Error("ClassName() returned empty string")
+	}
+	t.Logf("Block storage driver class name: %s", className)
+}
+
 func TestIOBlockStorageDriver_ReadRawStatistics(t *testing.T) {
 	media, err := IOMediaFromBSDName("disk0")
 	if err != nil {
@@ -123,9 +146,9 @@ func TestIOBlockStorageDriver_ReadRawStatistics(t *testing.T) {
 	}
 	defer media.Close()
 
-	driver, err := media.GetBlockStorageDriver()
+	driver, err := GetBlockStorageDriverFromMedia(media)
 	if err != nil {
-		t.Fatalf("GetBlockStorageDriver() failed: %v", err)
+		t.Fatalf("GetBlockStorageDriverFromMedia() failed: %v", err)
 	}
 	defer driver.Close()
 
@@ -159,9 +182,9 @@ func TestIOBlockStorageDriver_ReadRawStatistics_Values(t *testing.T) {
 	}
 	defer media.Close()
 
-	driver, err := media.GetBlockStorageDriver()
+	driver, err := GetBlockStorageDriverFromMedia(media)
 	if err != nil {
-		t.Fatalf("GetBlockStorageDriver() failed: %v", err)
+		t.Fatalf("GetBlockStorageDriverFromMedia() failed: %v", err)
 	}
 	defer driver.Close()
 
@@ -204,9 +227,9 @@ func TestIOBlockStorageDriver_Close(t *testing.T) {
 	}
 	defer media.Close()
 
-	driver, err := media.GetBlockStorageDriver()
+	driver, err := GetBlockStorageDriverFromMedia(media)
 	if err != nil {
-		t.Fatalf("GetBlockStorageDriver() failed: %v", err)
+		t.Fatalf("GetBlockStorageDriverFromMedia() failed: %v", err)
 	}
 
 	// Close should not return an error
@@ -227,9 +250,9 @@ func TestIOMedia_FullIntegration(t *testing.T) {
 	t.Logf("BSD Name: %s", media.BSDName())
 
 	// Get driver
-	driver, err := media.GetBlockStorageDriver()
+	driver, err := GetBlockStorageDriverFromMedia(media)
 	if err != nil {
-		t.Fatalf("GetBlockStorageDriver() failed: %v", err)
+		t.Fatalf("GetBlockStorageDriverFromMedia() failed: %v", err)
 	}
 	defer driver.Close()
 
@@ -271,9 +294,9 @@ func TestIOBlockStorageDriver_ReadRawStatistics_Multiple(t *testing.T) {
 	}
 	defer media.Close()
 
-	driver, err := media.GetBlockStorageDriver()
+	driver, err := GetBlockStorageDriverFromMedia(media)
 	if err != nil {
-		t.Fatalf("GetBlockStorageDriver() failed: %v", err)
+		t.Fatalf("GetBlockStorageDriverFromMedia() failed: %v", err)
 	}
 	defer driver.Close()
 
@@ -293,9 +316,9 @@ func TestIOBlockStorageDriver_ReadRawStatistics_Multiple(t *testing.T) {
 
 func BenchmarkGetIOMediaFromBSDName(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		media, err := getIOMediaFromBSDName("disk0")
+		media, err := GetIOMediaFromBSDName("disk0")
 		if err != nil {
-			b.Fatalf("getIOMediaFromBSDName failed: %v", err)
+			b.Fatalf("GetIOMediaFromBSDName failed: %v", err)
 		}
 		_ = media
 	}
@@ -318,9 +341,9 @@ func BenchmarkReadRawStatistics(b *testing.B) {
 	}
 	defer media.Close()
 
-	driver, err := media.GetBlockStorageDriver()
+	driver, err := GetBlockStorageDriverFromMedia(media)
 	if err != nil {
-		b.Fatalf("GetBlockStorageDriver failed: %v", err)
+		b.Fatalf("GetBlockStorageDriverFromMedia failed: %v", err)
 	}
 	defer driver.Close()
 
@@ -340,10 +363,10 @@ func BenchmarkFullPath(b *testing.B) {
 			b.Fatalf("IOMediaFromPath failed: %v", err)
 		}
 
-		driver, err := media.GetBlockStorageDriver()
+		driver, err := GetBlockStorageDriverFromMedia(media)
 		if err != nil {
 			media.Close()
-			b.Fatalf("GetBlockStorageDriver failed: %v", err)
+			b.Fatalf("GetBlockStorageDriverFromMedia failed: %v", err)
 		}
 
 		_, err = driver.ReadRawStatistics()
