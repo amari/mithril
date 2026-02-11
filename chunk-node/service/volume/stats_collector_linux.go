@@ -19,5 +19,5 @@ func newBlockDeviceStatsCollector(
 	pollInterval time.Duration,
 	log *zerolog.Logger,
 ) (portvolume.VolumeStatsCollector[*domain.BlockDeviceStats], error) {
-	return linux.NewSysfsBlockDeviceStatsCollector(ctx, path, pollInterval, log)
+	return linux.NewSysfsBlockDeviceStatsCollector(ctx, path, pollInterval, log, time.Now)
 }

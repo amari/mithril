@@ -25,6 +25,7 @@ type SysfsBlockDeviceStatsCollector struct {
 	path     string
 	statPath string // /sys/block/<device>/stat
 	log      *zerolog.Logger
+	nowFunc  func() time.Time
 
 	mu           sync.RWMutex
 	epoch        uint64
@@ -44,6 +45,7 @@ func NewSysfsBlockDeviceStatsCollector(
 	path string,
 	pollInterval time.Duration,
 	log *zerolog.Logger,
+	nowFunc func() time.Time,
 ) (*SysfsBlockDeviceStatsCollector, error) {
 	// Resolve path → device major:minor → /sys/block/<device>/stat
 	statPath, err := resolveBlockDeviceStatPath(path)
@@ -57,6 +59,7 @@ func NewSysfsBlockDeviceStatsCollector(
 		path:     path,
 		statPath: statPath,
 		log:      log,
+		nowFunc:  nowFunc,
 		cancel:   cancel,
 		done:     make(chan struct{}),
 	}
@@ -199,7 +202,7 @@ func (c *SysfsBlockDeviceStatsCollector) collect() {
 
 	if err == nil {
 		c.cachedSample.Value = stats
-		c.cachedSample.Time = time.Now()
+		c.cachedSample.Time = c.nowFunc()
 	}
 	// If err != nil (timeout or read error), Time is NOT updated → Epoch advances but Time frozen
 }
