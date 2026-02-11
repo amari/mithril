@@ -39,7 +39,7 @@ func TestIOKitVolumeLabelCollector_CollectVolumeLabels_RootPath(t *testing.T) {
 		LabelNVMe,
 		LabelUSB,
 		LabelVirtIO,
-		LabelAHCI,
+		LabelSATA,
 		LabelPATA,
 		LabelSAS,
 		LabelSCSI,
@@ -111,7 +111,7 @@ func TestIOKitVolumeLabelCollector_DetectsTransport(t *testing.T) {
 	switch {
 	case labels[LabelNVMe] == "true":
 		t.Log("NVMe storage detected (typical for modern Macs)")
-	case labels[LabelAHCI] == "true":
+	case labels[LabelSATA] == "true":
 		t.Log("AHCI/SATA storage detected")
 	case labels[LabelVirtIO] == "true":
 		t.Log("VirtIO storage detected (typical for VMs)")
@@ -145,7 +145,7 @@ func TestIOKitVolumeLabelCollector_LabelValueIsTrue(t *testing.T) {
 		LabelNVMe,
 		LabelUSB,
 		LabelVirtIO,
-		LabelAHCI,
+		LabelSATA,
 		LabelPATA,
 		LabelSAS,
 		LabelSCSI,

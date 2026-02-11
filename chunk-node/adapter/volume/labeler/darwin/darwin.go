@@ -15,7 +15,7 @@ const (
 	LabelNVMe   = "nvme"
 	LabelUSB    = "usb"
 	LabelVirtIO = "virtio"
-	LabelAHCI   = "ahci"
+	LabelSATA   = "sata"
 	LabelPATA   = "pata"
 	LabelSAS    = "sas"
 	LabelSCSI   = "scsi"
@@ -136,7 +136,7 @@ func (c *IOKitVolumeLabelCollector) detectTransport() (string, error) {
 	if conforms, err := iokit.CheckIOServiceTreeConformsToClassName(service, "IOAHCIPort"); err != nil {
 		return "", err
 	} else if conforms {
-		return LabelAHCI, nil
+		return LabelSATA, nil
 	}
 
 	// 5. Check for PATA
