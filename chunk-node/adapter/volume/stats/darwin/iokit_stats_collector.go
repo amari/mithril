@@ -17,9 +17,10 @@ import (
 
 // IOKitBlockDeviceStatsCollector polls IOKit block storage driver statistics in its own goroutine
 type IOKitBlockDeviceStatsCollector struct {
-	path   string
-	log    *zerolog.Logger
-	driver *IOBlockStorageDriver
+	path    string
+	log     *zerolog.Logger
+	nowFunc func() time.Time
+	driver  *IOBlockStorageDriver
 
 	mu           sync.RWMutex
 	epoch        uint64
@@ -39,6 +40,7 @@ func NewIOKitBlockDeviceStatsCollector(
 	path string,
 	pollInterval time.Duration,
 	log *zerolog.Logger,
+	nowFunc func() time.Time,
 ) (*IOKitBlockDeviceStatsCollector, error) {
 	// Resolve path → IOMedia → IOBlockStorageDriver
 	media, err := IOMediaFromPath(path)
@@ -59,11 +61,12 @@ func NewIOKitBlockDeviceStatsCollector(
 	pollCtx, cancel := context.WithCancel(ctx)
 
 	collector := &IOKitBlockDeviceStatsCollector{
-		path:   path,
-		log:    log,
-		driver: driver,
-		cancel: cancel,
-		done:   make(chan struct{}),
+		path:    path,
+		log:     log,
+		nowFunc: nowFunc,
+		driver:  driver,
+		cancel:  cancel,
+		done:    make(chan struct{}),
 	}
 
 	// Start poll loop in constructor
@@ -151,7 +154,7 @@ func (c *IOKitBlockDeviceStatsCollector) collect() {
 
 	if err == nil {
 		c.cachedSample.Value = stats
-		c.cachedSample.Time = time.Now()
+		c.cachedSample.Time = c.nowFunc()
 	}
 	// If err != nil (timeout or IOKit error), Time is NOT updated → Epoch advances but Time frozen
 }

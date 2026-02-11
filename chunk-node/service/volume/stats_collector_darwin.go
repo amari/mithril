@@ -19,5 +19,5 @@ func newBlockDeviceStatsCollector(
 	pollInterval time.Duration,
 	log *zerolog.Logger,
 ) (portvolume.VolumeStatsCollector[*domain.BlockDeviceStats], error) {
-	return darwin.NewIOKitBlockDeviceStatsCollector(ctx, path, pollInterval, log)
+	return darwin.NewIOKitBlockDeviceStatsCollector(ctx, path, pollInterval, log, time.Now)
 }
