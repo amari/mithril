@@ -33,6 +33,11 @@ tasks:
     deps: [proto-generate]
     cmds:
       - go test ./chunk-node/...
+  go-bench:
+    desc: Run Go project tests and benchmarks
+    deps: [proto-generate]
+    cmds:
+      - go test -bench=. ./chunk-node/...
   go-coverage:
     desc: Generate Go code coverage report using temp files
     deps: [proto-generate]
