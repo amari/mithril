@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,17 +14,17 @@ import (
 	"time"
 
 	"github.com/amari/mithril/chunk-node/domain"
+	linuxpkg "github.com/amari/mithril/chunk-node/linux"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/rs/zerolog"
-	"golang.org/x/sys/unix"
 )
 
 // SysfsBlockDeviceStatsCollector polls /sys/block in its own goroutine
 type SysfsBlockDeviceStatsCollector struct {
-	path     string
-	statPath string // /sys/block/<device>/stat
-	log      *zerolog.Logger
-	nowFunc  func() time.Time
+	path        string
+	blockDevice *linuxpkg.BlockDevice
+	log         *zerolog.Logger
+	nowFunc     func() time.Time
 
 	mu           sync.RWMutex
 	epoch        uint64
@@ -47,80 +46,33 @@ func NewSysfsBlockDeviceStatsCollector(
 	log *zerolog.Logger,
 	nowFunc func() time.Time,
 ) (*SysfsBlockDeviceStatsCollector, error) {
-	// Resolve path → device major:minor → /sys/block/<device>/stat
-	statPath, err := resolveBlockDeviceStatPath(path)
+	// Resolve path → device major:minor → sysfs block device
+	blockDevice, err := linuxpkg.ResolveBlockDevice(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve block device stat path: %w", err)
+		return nil, fmt.Errorf("failed to resolve block device: %w", err)
+	}
+
+	// Verify stat file exists
+	statPath := blockDevice.StatPath()
+	if _, err := os.Stat(statPath); err != nil {
+		return nil, fmt.Errorf("%w: %s", linuxpkg.ErrNoStatFile, statPath)
 	}
 
 	pollCtx, cancel := context.WithCancel(ctx)
 
 	collector := &SysfsBlockDeviceStatsCollector{
-		path:     path,
-		statPath: statPath,
-		log:      log,
-		nowFunc:  nowFunc,
-		cancel:   cancel,
-		done:     make(chan struct{}),
+		path:        path,
+		blockDevice: blockDevice,
+		log:         log,
+		nowFunc:     nowFunc,
+		cancel:      cancel,
+		done:        make(chan struct{}),
 	}
 
 	// Start poll loop in constructor
 	go collector.pollLoop(pollCtx, pollInterval)
 
 	return collector, nil
-}
-
-// resolveBlockDeviceStatPath resolves a filesystem path to its block device stat file
-//
-// Algorithm:
-// 1. Stat the path to get device major:minor
-// 2. Read symlink /sys/dev/block/major:minor to get device path
-// 3. Ascend directory tree while:
-//   - There's a "partition" file (indicates this is a partition)
-//   - AND there's no "stat" file (we need to go to parent device)
-//
-// 4. Return the stat file path of the block device (not partition)
-func resolveBlockDeviceStatPath(path string) (string, error) {
-	// Get device major:minor from path
-	var stat unix.Stat_t
-	if err := unix.Stat(path, &stat); err != nil {
-		return "", fmt.Errorf("failed to stat path: %w", err)
-	}
-
-	major := unix.Major(stat.Dev)
-	minor := unix.Minor(stat.Dev)
-
-	// Read symlink to get device path in sysfs
-	devLink := fmt.Sprintf("/sys/dev/block/%d:%d", major, minor)
-	devPath, err := os.Readlink(devLink)
-	if err != nil {
-		return "", fmt.Errorf("failed to read device symlink %s: %w", devLink, err)
-	}
-
-	// devPath is relative to /sys/dev/block, make it absolute
-	devPath = filepath.Join("/sys/dev/block", devPath)
-	devPath = filepath.Clean(devPath)
-
-	// Ascend while we're at a partition and stat file doesn't exist
-	for {
-		statPath := filepath.Join(devPath, "stat")
-		partitionPath := filepath.Join(devPath, "partition")
-
-		// Check if stat file exists
-		if _, err := os.Stat(statPath); err == nil {
-			// stat file exists, we found the device
-			return statPath, nil
-		}
-
-		// Check if this is a partition
-		if _, err := os.Stat(partitionPath); os.IsNotExist(err) {
-			// No partition file, this is not a partition, can't go further
-			return "", fmt.Errorf("no stat file found and not a partition at %s", devPath)
-		}
-
-		// This is a partition and no stat file, ascend to parent
-		devPath = filepath.Dir(devPath)
-	}
 }
 
 func (c *SysfsBlockDeviceStatsCollector) pollLoop(ctx context.Context, interval time.Duration) {
@@ -230,14 +182,15 @@ func (c *SysfsBlockDeviceStatsCollector) readSysfs() (*domain.BlockDeviceStats, 
 	// 16 - flush requests completed successfully (optional, kernel 5.5+)
 	// 17 - time spent flushing (ms) (optional, kernel 5.5+)
 
-	data, err := os.ReadFile(c.statPath)
+	statPath := c.blockDevice.StatPath()
+	data, err := os.ReadFile(statPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read stat file: %w", err)
 	}
 
 	fields := strings.Fields(string(data))
 	if len(fields) < 11 {
-		return nil, fmt.Errorf("unexpected stat format: expected at least 11 fields, got %d", len(fields))
+		return nil, fmt.Errorf("%w: expected at least 11 fields, got %d", linuxpkg.ErrInvalidStatFormat, len(fields))
 	}
 
 	parseInt64 := func(s string) int64 {

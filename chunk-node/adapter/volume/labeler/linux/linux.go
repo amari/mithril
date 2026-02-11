@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	linuxpkg "github.com/amari/mithril/chunk-node/linux"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
-	"golang.org/x/sys/unix"
 )
 
 // Transport label key constants.
@@ -35,66 +35,23 @@ const (
 
 // SysfsVolumeLabelCollector collects volume labels by reading sysfs.
 type SysfsVolumeLabelCollector struct {
-	path       string
-	sysDevPath string // /sys/dev/block/<major>:<minor> resolved to actual device path
+	path        string
+	blockDevice *linuxpkg.BlockDevice
 }
 
 var _ portvolume.VolumeLabelCollector = (*SysfsVolumeLabelCollector)(nil)
 
 // NewSysfsVolumeLabelCollector creates a new SysfsVolumeLabelCollector for the given filesystem path.
 func NewSysfsVolumeLabelCollector(path string) (*SysfsVolumeLabelCollector, error) {
-	sysDevPath, err := resolveSysfsDevicePath(path)
+	blockDevice, err := linuxpkg.ResolveBlockDevice(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve sysfs device path: %w", err)
+		return nil, fmt.Errorf("failed to resolve block device: %w", err)
 	}
 
 	return &SysfsVolumeLabelCollector{
-		path:       path,
-		sysDevPath: sysDevPath,
+		path:        path,
+		blockDevice: blockDevice,
 	}, nil
-}
-
-// resolveSysfsDevicePath resolves a filesystem path to its sysfs device directory.
-//
-// Algorithm:
-// 1. Stat the path to get device major:minor
-// 2. Read symlink /sys/dev/block/major:minor to get device path
-// 3. Ascend directory tree while there's a "partition" file (to get to the parent device)
-// 4. Return the sysfs device path
-func resolveSysfsDevicePath(path string) (string, error) {
-	// Get device major:minor from path
-	var stat unix.Stat_t
-	if err := unix.Stat(path, &stat); err != nil {
-		return "", fmt.Errorf("failed to stat path: %w", err)
-	}
-
-	major := unix.Major(stat.Dev)
-	minor := unix.Minor(stat.Dev)
-
-	// Read symlink to get device path in sysfs
-	devLink := fmt.Sprintf("/sys/dev/block/%d:%d", major, minor)
-	devPath, err := os.Readlink(devLink)
-	if err != nil {
-		return "", fmt.Errorf("failed to read device symlink %s: %w", devLink, err)
-	}
-
-	// devPath is relative to /sys/dev/block, make it absolute
-	devPath = filepath.Join("/sys/dev/block", devPath)
-	devPath = filepath.Clean(devPath)
-
-	// Ascend while we're at a partition to get to the parent device
-	for {
-		partitionPath := filepath.Join(devPath, "partition")
-
-		// Check if this is a partition
-		if _, err := os.Stat(partitionPath); os.IsNotExist(err) {
-			// No partition file, this is the actual block device
-			return devPath, nil
-		}
-
-		// This is a partition, ascend to parent
-		devPath = filepath.Dir(devPath)
-	}
 }
 
 // CollectVolumeLabels reads sysfs to collect volume labels.
@@ -102,17 +59,17 @@ func (c *SysfsVolumeLabelCollector) CollectVolumeLabels() (map[string]string, er
 	labels := make(map[string]string)
 
 	// Model
-	if model, err := c.readFileTrimSpace("device/model"); err == nil && model != "" {
+	if model, err := c.blockDevice.ReadFile("device/model"); err == nil && model != "" {
 		labels[LabelModel] = model
 	}
 
 	// Vendor
-	if vendor, err := c.readFileTrimSpace("device/vendor"); err == nil && vendor != "" {
+	if vendor, err := c.blockDevice.ReadFile("device/vendor"); err == nil && vendor != "" {
 		labels[LabelVendor] = vendor
 	}
 
 	// SSD vs HDD (rotational = 0 = SSD)
-	if rotational, err := c.readFileTrimSpace("queue/rotational"); err == nil {
+	if rotational, err := c.blockDevice.ReadFile("queue/rotational"); err == nil {
 		switch rotational {
 		case "0":
 			labels[LabelSSD] = "true"
@@ -134,10 +91,10 @@ func (c *SysfsVolumeLabelCollector) CollectVolumeLabels() (map[string]string, er
 // Returns the label key for the detected transport, or empty string if none detected.
 func (c *SysfsVolumeLabelCollector) detectTransport() string {
 	// Try device/transport first
-	transport, err := c.readFileTrimSpace("device/transport")
+	transport, err := c.blockDevice.ReadFile("device/transport")
 	if err != nil {
 		// Fallback: read subsystem symlink
-		subsystemLink := filepath.Join(c.sysDevPath, "device/subsystem")
+		subsystemLink := filepath.Join(c.blockDevice.SysfsPath, "device/subsystem")
 		if link, err := os.Readlink(subsystemLink); err == nil {
 			transport = filepath.Base(link)
 		}
@@ -165,7 +122,7 @@ func (c *SysfsVolumeLabelCollector) detectTransport() string {
 
 // detectATATransport distinguishes between SATA and PATA.
 func (c *SysfsVolumeLabelCollector) detectATATransport() string {
-	driverLink := filepath.Join(c.sysDevPath, "device/driver")
+	driverLink := filepath.Join(c.blockDevice.SysfsPath, "device/driver")
 	link, err := os.Readlink(driverLink)
 	if err != nil {
 		return ""
@@ -187,34 +144,24 @@ func (c *SysfsVolumeLabelCollector) detectATATransport() string {
 // detectSCSITransport distinguishes between SCSI, SAS, and iSCSI.
 func (c *SysfsVolumeLabelCollector) detectSCSITransport() string {
 	// Check for iSCSI
-	iscsiPath := filepath.Join(c.sysDevPath, "device/iscsi_session")
+	iscsiPath := filepath.Join(c.blockDevice.SysfsPath, "device/iscsi_session")
 	if _, err := os.Stat(iscsiPath); err == nil {
 		return LabelISCSI
 	}
 
 	// Check for SAS
-	sasDevicePath := filepath.Join(c.sysDevPath, "device/sas_device")
+	sasDevicePath := filepath.Join(c.blockDevice.SysfsPath, "device/sas_device")
 	if _, err := os.Stat(sasDevicePath); err == nil {
 		return LabelSAS
 	}
 
-	sasPortPath := filepath.Join(c.sysDevPath, "device/sas_port")
+	sasPortPath := filepath.Join(c.blockDevice.SysfsPath, "device/sas_port")
 	if _, err := os.Stat(sasPortPath); err == nil {
 		return LabelSAS
 	}
 
 	// Default to SCSI
 	return LabelSCSI
-}
-
-// readFileTrimSpace reads a file relative to sysDevPath and returns its content with whitespace trimmed.
-func (c *SysfsVolumeLabelCollector) readFileTrimSpace(relPath string) (string, error) {
-	fullPath := filepath.Join(c.sysDevPath, relPath)
-	data, err := os.ReadFile(fullPath)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(data)), nil
 }
 
 // Close releases resources held by the collector.
