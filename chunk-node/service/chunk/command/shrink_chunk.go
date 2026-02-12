@@ -10,7 +10,6 @@ import (
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port/chunk"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
-	"github.com/amari/mithril/chunk-node/service/admission"
 	"github.com/amari/mithril/chunk-node/service/volume"
 	"github.com/amari/mithril/chunk-node/volumeerrors"
 	"github.com/rs/zerolog"
@@ -28,25 +27,28 @@ type ShrinkChunkOutput struct {
 }
 
 type ShrinkChunkHandler struct {
-	Repo                    chunk.ChunkRepository
-	VolumeHealthChecker     portvolume.VolumeHealthChecker
-	VolumeManager           *volume.VolumeManager
-	VolumeTelemetryProvider portvolume.VolumeTelemetryProvider
-	NowFunc                 func() time.Time
+	Repo                      chunk.ChunkRepository
+	VolumeAdmissionController portvolume.VolumeAdmissionController
+	VolumeHealthChecker       portvolume.VolumeHealthChecker
+	VolumeManager             *volume.VolumeManager
+	VolumeTelemetryProvider   portvolume.VolumeTelemetryProvider
+	NowFunc                   func() time.Time
 }
 
 func NewShrinkChunkHandler(
 	repo chunk.ChunkRepository,
+	volumeAdmissionController portvolume.VolumeAdmissionController,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
 	volumeManager *volume.VolumeManager,
 	volumeTelemetryProvider portvolume.VolumeTelemetryProvider,
 ) *ShrinkChunkHandler {
 	return &ShrinkChunkHandler{
-		Repo:                    repo,
-		VolumeHealthChecker:     volumeHealthChecker,
-		VolumeManager:           volumeManager,
-		VolumeTelemetryProvider: volumeTelemetryProvider,
-		NowFunc:                 time.Now,
+		Repo:                      repo,
+		VolumeAdmissionController: volumeAdmissionController,
+		VolumeHealthChecker:       volumeHealthChecker,
+		VolumeManager:             volumeManager,
+		VolumeTelemetryProvider:   volumeTelemetryProvider,
+		NowFunc:                   time.Now,
 	}
 }
 
@@ -73,10 +75,8 @@ func (h *ShrinkChunkHandler) HandleShrinkChunk(ctx context.Context, input *Shrin
 	// Add volume telemetry to context
 	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, availableChunk.ID.VolumeID(), h.VolumeTelemetryProvider)
 
-	vol, err := h.VolumeManager.GetVolumeByID(availableChunk.ID.VolumeID())
-	if err != nil {
-		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to get volume handle")
-
+	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
+	if err := h.VolumeAdmissionController.AdmitWrite(availableChunk.ID.VolumeID()); err != nil {
 		return nil, chunkerrors.WithChunk(
 			err,
 			availableChunk.ID,
@@ -85,11 +85,10 @@ func (h *ShrinkChunkHandler) HandleShrinkChunk(ctx context.Context, input *Shrin
 		)
 	}
 
-	// check the volume health
-	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID())
+	vol, err := h.VolumeManager.GetVolumeByID(availableChunk.ID.VolumeID())
+	if err != nil {
+		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to get volume handle")
 
-	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
-	if err := admission.AdmitWriteWithVolumeHealth(ctx, volumeHealth); err != nil {
 		return nil, chunkerrors.WithChunk(
 			err,
 			availableChunk.ID,

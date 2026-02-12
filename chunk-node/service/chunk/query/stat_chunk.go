@@ -21,20 +21,23 @@ type StatChunkOutput struct {
 }
 
 type StatChunkHandler struct {
-	Repo                    chunk.ChunkRepository
-	VolumeHealthChecker     volume.VolumeHealthChecker
-	VolumeTelemetryProvider volume.VolumeTelemetryProvider
+	Repo                      chunk.ChunkRepository
+	VolumeAdmissionController volume.VolumeAdmissionController
+	VolumeHealthChecker       volume.VolumeHealthChecker
+	VolumeTelemetryProvider   volume.VolumeTelemetryProvider
 }
 
 func NewStatChunkHandler(
 	repo chunk.ChunkRepository,
+	volumeAdmissionController volume.VolumeAdmissionController,
 	volumeHealthChecker volume.VolumeHealthChecker,
 	volumeTelemetryProvider volume.VolumeTelemetryProvider,
 ) *StatChunkHandler {
 	return &StatChunkHandler{
-		Repo:                    repo,
-		VolumeHealthChecker:     volumeHealthChecker,
-		VolumeTelemetryProvider: volumeTelemetryProvider,
+		Repo:                      repo,
+		VolumeAdmissionController: volumeAdmissionController,
+		VolumeHealthChecker:       volumeHealthChecker,
+		VolumeTelemetryProvider:   volumeTelemetryProvider,
 	}
 }
 
@@ -68,13 +71,23 @@ func (h *StatChunkHandler) HandleStatChunk(ctx context.Context, input *StatChunk
 		return nil, chunkerrors.ErrWrongState
 	}
 
-	// Add volume telemetry to context
-	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, availableChunk.ID.VolumeID(), h.VolumeTelemetryProvider)
+	volumeID := availableChunk.ID.VolumeID()
 
-	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ChunkID().VolumeID())
+	// Add volume telemetry to context
+	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, volumeID, h.VolumeTelemetryProvider)
+
+	// perform admission control check before reading from the volume to avoid reading from a volume that is not healthy enough to accept reads
+	if err := h.VolumeAdmissionController.AdmitStat(volumeID); err != nil {
+		return nil, chunkerrors.WithChunk(
+			err,
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
+	}
 
 	return &StatChunkOutput{
 		Chunk:        availableChunk,
-		VolumeHealth: volumeHealth,
+		VolumeHealth: h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ChunkID().VolumeID()),
 	}, nil
 }

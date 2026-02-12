@@ -42,23 +42,25 @@ func (m *mockRemoteChunkClient) StatChunk(ctx context.Context, chunkID domain.Ch
 // --- AppendFromChunk Test Helpers ---
 
 type appendFromTestSetup struct {
-	handler           *AppendFromChunkHandler
-	repo              *mockChunkRepository
-	chunkStore        *mockChunkStore
-	healthChecker     *mockVolumeHealthChecker
-	remoteChunkClient *mockRemoteChunkClient
-	telemetryProvider *mockVolumeTelemetryProvider
+	handler             *AppendFromChunkHandler
+	repo                *mockChunkRepository
+	chunkStore          *mockChunkStore
+	healthChecker       *mockVolumeHealthChecker
+	remoteChunkClient   *mockRemoteChunkClient
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
 }
 
 func newAppendFromTestHandler(opts ...func(*appendFromTestOptions)) *appendFromTestSetup {
 	o := &appendFromTestOptions{
-		repo:              &mockChunkRepository{},
-		chunkStore:        &mockChunkStore{},
-		healthChecker:     &mockVolumeHealthChecker{},
-		remoteChunkClient: &mockRemoteChunkClient{},
-		telemetryProvider: &mockVolumeTelemetryProvider{},
-		volumeID:          domain.VolumeID(1),
-		nowFunc:           func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
+		repo:                &mockChunkRepository{},
+		chunkStore:          &mockChunkStore{},
+		healthChecker:       &mockVolumeHealthChecker{},
+		remoteChunkClient:   &mockRemoteChunkClient{},
+		telemetryProvider:   &mockVolumeTelemetryProvider{},
+		admissionController: &mockVolumeAdmissionController{},
+		volumeID:            domain.VolumeID(1),
+		nowFunc:             func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
 	}
 
 	for _, opt := range opts {
@@ -69,32 +71,35 @@ func newAppendFromTestHandler(opts ...func(*appendFromTestOptions)) *appendFromT
 	volumeManager.AddVolume(&mockVolume{id: o.volumeID, chunkStore: o.chunkStore})
 
 	handler := &AppendFromChunkHandler{
-		Repo:                    o.repo,
-		VolumeHealthChecker:     o.healthChecker,
-		VolumeManager:           volumeManager,
-		VolumeTelemetryProvider: o.telemetryProvider,
-		RemoteChunkClient:       o.remoteChunkClient,
-		NowFunc:                 o.nowFunc,
+		Repo:                      o.repo,
+		VolumeAdmissionController: o.admissionController,
+		VolumeHealthChecker:       o.healthChecker,
+		VolumeManager:             volumeManager,
+		VolumeTelemetryProvider:   o.telemetryProvider,
+		RemoteChunkClient:         o.remoteChunkClient,
+		NowFunc:                   o.nowFunc,
 	}
 
 	return &appendFromTestSetup{
-		handler:           handler,
-		repo:              o.repo,
-		chunkStore:        o.chunkStore,
-		healthChecker:     o.healthChecker,
-		remoteChunkClient: o.remoteChunkClient,
-		telemetryProvider: o.telemetryProvider,
+		handler:             handler,
+		repo:                o.repo,
+		chunkStore:          o.chunkStore,
+		healthChecker:       o.healthChecker,
+		remoteChunkClient:   o.remoteChunkClient,
+		telemetryProvider:   o.telemetryProvider,
+		admissionController: o.admissionController,
 	}
 }
 
 type appendFromTestOptions struct {
-	repo              *mockChunkRepository
-	chunkStore        *mockChunkStore
-	healthChecker     *mockVolumeHealthChecker
-	remoteChunkClient *mockRemoteChunkClient
-	telemetryProvider *mockVolumeTelemetryProvider
-	volumeID          domain.VolumeID
-	nowFunc           func() time.Time
+	repo                *mockChunkRepository
+	chunkStore          *mockChunkStore
+	healthChecker       *mockVolumeHealthChecker
+	remoteChunkClient   *mockRemoteChunkClient
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
+	volumeID            domain.VolumeID
+	nowFunc             func() time.Time
 }
 
 func appendFromWithRepo(repo *mockChunkRepository) func(*appendFromTestOptions) {
@@ -115,6 +120,10 @@ func appendFromWithRemoteChunkClient(client *mockRemoteChunkClient) func(*append
 
 func appendFromWithTelemetryProvider(provider *mockVolumeTelemetryProvider) func(*appendFromTestOptions) {
 	return func(o *appendFromTestOptions) { o.telemetryProvider = provider }
+}
+
+func appendFromWithAdmissionController(controller *mockVolumeAdmissionController) func(*appendFromTestOptions) {
+	return func(o *appendFromTestOptions) { o.admissionController = controller }
 }
 
 func appendFromWithVolumeID(id domain.VolumeID) func(*appendFromTestOptions) {
@@ -490,11 +499,23 @@ func TestAppendFromChunkHandler_VolumeErrors(t *testing.T) {
 				setup = newAppendFromTestHandler(appendFromWithRepo(repoReturningChunk(existing)))
 			} else {
 				existing := makeAvailableChunk([]byte("wk"), 1000, 1)
+				volumeState := tt.volumeState
 				setup = newAppendFromTestHandler(
 					appendFromWithRepo(repoReturningChunk(existing)),
 					appendFromWithHealthChecker(&mockVolumeHealthChecker{
 						checkVolumeHealthFunc: func(v domain.VolumeID) *domain.VolumeHealth {
-							return &domain.VolumeHealth{State: tt.volumeState}
+							return &domain.VolumeHealth{State: volumeState}
+						},
+					}),
+					appendFromWithAdmissionController(&mockVolumeAdmissionController{
+						admitWriteFunc: func(id domain.VolumeID) error {
+							switch volumeState {
+							case domain.VolumeStateDegraded:
+								return volumeerrors.WithState(volumeerrors.ErrDegraded, volumeerrors.StateDegraded)
+							case domain.VolumeStateFailed:
+								return volumeerrors.WithState(volumeerrors.ErrFailed, volumeerrors.StateFailed)
+							}
+							return nil
 						},
 					}),
 				)

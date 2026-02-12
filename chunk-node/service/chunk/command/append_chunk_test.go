@@ -17,21 +17,23 @@ import (
 // --- Append Test Helpers ---
 
 type appendTestSetup struct {
-	handler           *AppendChunkHandler
-	repo              *mockChunkRepository
-	chunkStore        *mockChunkStore
-	healthChecker     *mockVolumeHealthChecker
-	telemetryProvider *mockVolumeTelemetryProvider
+	handler             *AppendChunkHandler
+	repo                *mockChunkRepository
+	chunkStore          *mockChunkStore
+	healthChecker       *mockVolumeHealthChecker
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
 }
 
 func newAppendTestHandler(opts ...func(*appendTestOptions)) *appendTestSetup {
 	o := &appendTestOptions{
-		repo:              &mockChunkRepository{},
-		chunkStore:        &mockChunkStore{},
-		healthChecker:     &mockVolumeHealthChecker{},
-		telemetryProvider: &mockVolumeTelemetryProvider{},
-		volumeID:          domain.VolumeID(1),
-		nowFunc:           func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
+		repo:                &mockChunkRepository{},
+		chunkStore:          &mockChunkStore{},
+		healthChecker:       &mockVolumeHealthChecker{},
+		telemetryProvider:   &mockVolumeTelemetryProvider{},
+		admissionController: &mockVolumeAdmissionController{},
+		volumeID:            domain.VolumeID(1),
+		nowFunc:             func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
 	}
 
 	for _, opt := range opts {
@@ -42,29 +44,32 @@ func newAppendTestHandler(opts ...func(*appendTestOptions)) *appendTestSetup {
 	volumeManager.AddVolume(&mockVolume{id: o.volumeID, chunkStore: o.chunkStore})
 
 	handler := &AppendChunkHandler{
-		Repo:                    o.repo,
-		VolumeHealthChecker:     o.healthChecker,
-		VolumeManager:           volumeManager,
-		VolumeTelemetryProvider: o.telemetryProvider,
-		NowFunc:                 o.nowFunc,
+		Repo:                      o.repo,
+		VolumeAdmissionController: o.admissionController,
+		VolumeHealthChecker:       o.healthChecker,
+		VolumeManager:             volumeManager,
+		VolumeTelemetryProvider:   o.telemetryProvider,
+		NowFunc:                   o.nowFunc,
 	}
 
 	return &appendTestSetup{
-		handler:           handler,
-		repo:              o.repo,
-		chunkStore:        o.chunkStore,
-		healthChecker:     o.healthChecker,
-		telemetryProvider: o.telemetryProvider,
+		handler:             handler,
+		repo:                o.repo,
+		chunkStore:          o.chunkStore,
+		healthChecker:       o.healthChecker,
+		telemetryProvider:   o.telemetryProvider,
+		admissionController: o.admissionController,
 	}
 }
 
 type appendTestOptions struct {
-	repo              *mockChunkRepository
-	chunkStore        *mockChunkStore
-	healthChecker     *mockVolumeHealthChecker
-	telemetryProvider *mockVolumeTelemetryProvider
-	volumeID          domain.VolumeID
-	nowFunc           func() time.Time
+	repo                *mockChunkRepository
+	chunkStore          *mockChunkStore
+	healthChecker       *mockVolumeHealthChecker
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
+	volumeID            domain.VolumeID
+	nowFunc             func() time.Time
 }
 
 func appendWithRepo(repo *mockChunkRepository) func(*appendTestOptions) {
@@ -81,6 +86,10 @@ func appendWithHealthChecker(checker *mockVolumeHealthChecker) func(*appendTestO
 
 func appendWithTelemetryProvider(provider *mockVolumeTelemetryProvider) func(*appendTestOptions) {
 	return func(o *appendTestOptions) { o.telemetryProvider = provider }
+}
+
+func appendWithAdmissionController(controller *mockVolumeAdmissionController) func(*appendTestOptions) {
+	return func(o *appendTestOptions) { o.admissionController = controller }
 }
 
 func appendWithVolumeID(id domain.VolumeID) func(*appendTestOptions) {
@@ -419,6 +428,17 @@ func TestAppendChunkHandler_VolumeErrors(t *testing.T) {
 					appendWithHealthChecker(&mockVolumeHealthChecker{
 						checkVolumeHealthFunc: func(v domain.VolumeID) *domain.VolumeHealth {
 							return &domain.VolumeHealth{State: tt.volumeState}
+						},
+					}),
+					appendWithAdmissionController(&mockVolumeAdmissionController{
+						admitWriteFunc: func(id domain.VolumeID) error {
+							switch tt.volumeState {
+							case domain.VolumeStateDegraded:
+								return volumeerrors.WithState(volumeerrors.ErrDegraded, volumeerrors.StateDegraded)
+							case domain.VolumeStateFailed:
+								return volumeerrors.WithState(volumeerrors.ErrFailed, volumeerrors.StateFailed)
+							}
+							return nil
 						},
 					}),
 				)

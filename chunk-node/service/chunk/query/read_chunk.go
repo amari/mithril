@@ -9,7 +9,6 @@ import (
 	"github.com/amari/mithril/chunk-node/port"
 	"github.com/amari/mithril/chunk-node/port/chunk"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
-	"github.com/amari/mithril/chunk-node/service/admission"
 	"github.com/amari/mithril/chunk-node/service/volume"
 	"github.com/rs/zerolog"
 )
@@ -28,23 +27,26 @@ type ReadChunkOutput struct {
 }
 
 type ReadChunkHandler struct {
-	Repo                    chunk.ChunkRepository
-	VolumeManager           *volume.VolumeManager
-	VolumeHealthChecker     portvolume.VolumeHealthChecker
-	VolumeTelemetryProvider portvolume.VolumeTelemetryProvider
+	Repo                      chunk.ChunkRepository
+	VolumeManager             *volume.VolumeManager
+	VolumeAdmissionController portvolume.VolumeAdmissionController
+	VolumeHealthChecker       portvolume.VolumeHealthChecker
+	VolumeTelemetryProvider   portvolume.VolumeTelemetryProvider
 }
 
 func NewReadChunkHandler(
 	repo chunk.ChunkRepository,
 	volumeManager *volume.VolumeManager,
+	volumeAdmissionController portvolume.VolumeAdmissionController,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
 	volumeTelemetryProvider portvolume.VolumeTelemetryProvider,
 ) *ReadChunkHandler {
 	return &ReadChunkHandler{
-		Repo:                    repo,
-		VolumeManager:           volumeManager,
-		VolumeHealthChecker:     volumeHealthChecker,
-		VolumeTelemetryProvider: volumeTelemetryProvider,
+		Repo:                      repo,
+		VolumeAdmissionController: volumeAdmissionController,
+		VolumeManager:             volumeManager,
+		VolumeHealthChecker:       volumeHealthChecker,
+		VolumeTelemetryProvider:   volumeTelemetryProvider,
 	}
 }
 
@@ -83,24 +85,21 @@ func (h *ReadChunkHandler) HandleReadChunk(ctx context.Context, input *ReadChunk
 	// Add volume telemetry to context
 	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, volumeID, h.VolumeTelemetryProvider)
 
-	vol, err := h.VolumeManager.GetVolumeByID(volumeID)
-	if err != nil {
-		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to get volume handle")
-
-		return nil, err
-	}
-
-	/// check the volume health
-	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID())
-
 	// perform admission control check before reading from the volume to avoid reading from a volume that is not healthy enough to accept reads
-	if err := admission.AdmitReadWithVolumeHealth(ctx, volumeHealth); err != nil {
+	if err := h.VolumeAdmissionController.AdmitRead(volumeID); err != nil {
 		return nil, chunkerrors.WithChunk(
 			err,
 			availableChunk.ID,
 			availableChunk.Version,
 			availableChunk.Size,
 		)
+	}
+
+	vol, err := h.VolumeManager.GetVolumeByID(volumeID)
+	if err != nil {
+		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to get volume handle")
+
+		return nil, err
 	}
 
 	handle, err := vol.Chunks().OpenChunk(ctx, availableChunk.ID)
@@ -112,7 +111,7 @@ func (h *ReadChunkHandler) HandleReadChunk(ctx context.Context, input *ReadChunk
 
 	return &ReadChunkOutput{
 		Chunk:        availableChunk,
-		VolumeHealth: volumeHealth,
+		VolumeHealth: h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID()),
 		Handle:       handle,
 		CheckVolumeHealthFunc: func() *domain.VolumeHealth {
 			return h.VolumeHealthChecker.CheckVolumeHealth(volumeID)

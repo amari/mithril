@@ -15,21 +15,23 @@ import (
 // --- Delete Test Helpers ---
 
 type deleteTestSetup struct {
-	handler           *DeleteChunkHandler
-	repo              *mockChunkRepository
-	chunkStore        *mockChunkStore
-	healthChecker     *mockVolumeHealthChecker
-	telemetryProvider *mockVolumeTelemetryProvider
+	handler             *DeleteChunkHandler
+	repo                *mockChunkRepository
+	chunkStore          *mockChunkStore
+	healthChecker       *mockVolumeHealthChecker
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
 }
 
 func newDeleteTestHandler(opts ...func(*deleteTestOptions)) *deleteTestSetup {
 	o := &deleteTestOptions{
-		repo:              &mockChunkRepository{},
-		chunkStore:        &mockChunkStore{},
-		healthChecker:     &mockVolumeHealthChecker{},
-		telemetryProvider: &mockVolumeTelemetryProvider{},
-		volumeID:          domain.VolumeID(1),
-		nowFunc:           func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
+		repo:                &mockChunkRepository{},
+		chunkStore:          &mockChunkStore{},
+		healthChecker:       &mockVolumeHealthChecker{},
+		telemetryProvider:   &mockVolumeTelemetryProvider{},
+		admissionController: &mockVolumeAdmissionController{},
+		volumeID:            domain.VolumeID(1),
+		nowFunc:             func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
 	}
 
 	for _, opt := range opts {
@@ -40,29 +42,32 @@ func newDeleteTestHandler(opts ...func(*deleteTestOptions)) *deleteTestSetup {
 	volumeManager.AddVolume(&mockVolume{id: o.volumeID, chunkStore: o.chunkStore})
 
 	handler := &DeleteChunkHandler{
-		Repo:                    o.repo,
-		VolumeHealthChecker:     o.healthChecker,
-		VolumeManager:           volumeManager,
-		VolumeTelemetryProvider: o.telemetryProvider,
-		NowFunc:                 o.nowFunc,
+		Repo:                      o.repo,
+		VolumeAdmissionController: o.admissionController,
+		VolumeHealthChecker:       o.healthChecker,
+		VolumeManager:             volumeManager,
+		VolumeTelemetryProvider:   o.telemetryProvider,
+		NowFunc:                   o.nowFunc,
 	}
 
 	return &deleteTestSetup{
-		handler:           handler,
-		repo:              o.repo,
-		chunkStore:        o.chunkStore,
-		healthChecker:     o.healthChecker,
-		telemetryProvider: o.telemetryProvider,
+		handler:             handler,
+		repo:                o.repo,
+		chunkStore:          o.chunkStore,
+		healthChecker:       o.healthChecker,
+		telemetryProvider:   o.telemetryProvider,
+		admissionController: o.admissionController,
 	}
 }
 
 type deleteTestOptions struct {
-	repo              *mockChunkRepository
-	chunkStore        *mockChunkStore
-	healthChecker     *mockVolumeHealthChecker
-	telemetryProvider *mockVolumeTelemetryProvider
-	volumeID          domain.VolumeID
-	nowFunc           func() time.Time
+	repo                *mockChunkRepository
+	chunkStore          *mockChunkStore
+	healthChecker       *mockVolumeHealthChecker
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
+	volumeID            domain.VolumeID
+	nowFunc             func() time.Time
 }
 
 func deleteWithRepo(repo *mockChunkRepository) func(*deleteTestOptions) {
@@ -79,6 +84,10 @@ func deleteWithHealthChecker(checker *mockVolumeHealthChecker) func(*deleteTestO
 
 func deleteWithTelemetryProvider(provider *mockVolumeTelemetryProvider) func(*deleteTestOptions) {
 	return func(o *deleteTestOptions) { o.telemetryProvider = provider }
+}
+
+func deleteWithAdmissionController(controller *mockVolumeAdmissionController) func(*deleteTestOptions) {
+	return func(o *deleteTestOptions) { o.admissionController = controller }
 }
 
 func deleteWithVolumeID(id domain.VolumeID) func(*deleteTestOptions) {
@@ -306,11 +315,23 @@ func TestDeleteChunkHandler_VolumeErrors(t *testing.T) {
 				setup = newDeleteTestHandler(deleteWithRepo(repoReturningChunk(existing)))
 			} else {
 				existing := makeAvailableChunk([]byte("wk"), 1000, 1)
+				volumeState := tt.volumeState
 				setup = newDeleteTestHandler(
 					deleteWithRepo(repoReturningChunk(existing)),
 					deleteWithHealthChecker(&mockVolumeHealthChecker{
 						checkVolumeHealthFunc: func(v domain.VolumeID) *domain.VolumeHealth {
-							return &domain.VolumeHealth{State: tt.volumeState}
+							return &domain.VolumeHealth{State: volumeState}
+						},
+					}),
+					deleteWithAdmissionController(&mockVolumeAdmissionController{
+						admitWriteFunc: func(id domain.VolumeID) error {
+							switch volumeState {
+							case domain.VolumeStateDegraded:
+								return volumeerrors.WithState(volumeerrors.ErrDegraded, volumeerrors.StateDegraded)
+							case domain.VolumeStateFailed:
+								return volumeerrors.WithState(volumeerrors.ErrFailed, volumeerrors.StateFailed)
+							}
+							return nil
 						},
 					}),
 				)

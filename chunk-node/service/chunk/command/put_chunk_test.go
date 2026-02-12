@@ -18,11 +18,12 @@ import (
 // --- Put Test Helpers ---
 
 type putTestSetup struct {
-	handler           *PutChunkHandler
-	repo              *mockChunkRepository
-	chunkStore        *mockChunkStore
-	healthChecker     *mockVolumeHealthChecker
-	telemetryProvider *mockVolumeTelemetryProvider
+	handler             *PutChunkHandler
+	repo                *mockChunkRepository
+	chunkStore          *mockChunkStore
+	healthChecker       *mockVolumeHealthChecker
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
 }
 
 func newPutTestHandler(opts ...func(*putTestOptions)) *putTestSetup {
@@ -34,6 +35,7 @@ func newPutTestHandler(opts ...func(*putTestOptions)) *putTestSetup {
 		volumeHealthChecker: &mockVolumeHealthChecker{},
 		volumeStatsProvider: &mockVolumeStatsProvider{},
 		telemetryProvider:   &mockVolumeTelemetryProvider{},
+		admissionController: &mockVolumeAdmissionController{},
 		chunkStore:          &mockChunkStore{},
 		volumeID:            domain.VolumeID(1),
 		nowFunc:             func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
@@ -47,23 +49,25 @@ func newPutTestHandler(opts ...func(*putTestOptions)) *putTestSetup {
 	volumeManager.AddVolume(&mockVolume{id: o.volumeID, chunkStore: o.chunkStore})
 
 	handler := &PutChunkHandler{
-		Repo:                    o.repo,
-		IDGen:                   o.idGen,
-		VolumeManager:           volumeManager,
-		VolumePicker:            o.volumePicker,
-		NowFunc:                 o.nowFunc,
-		NodeIdentityRepository:  o.nodeIdentityRepo,
-		VolumeHealthChecker:     o.volumeHealthChecker,
-		VolumeStatsProvider:     o.volumeStatsProvider,
-		VolumeTelemetryProvider: o.telemetryProvider,
+		Repo:                      o.repo,
+		IDGen:                     o.idGen,
+		VolumeAdmissionController: o.admissionController,
+		VolumeManager:             volumeManager,
+		VolumePicker:              o.volumePicker,
+		NowFunc:                   o.nowFunc,
+		NodeIdentityRepository:    o.nodeIdentityRepo,
+		VolumeHealthChecker:       o.volumeHealthChecker,
+		VolumeStatsProvider:       o.volumeStatsProvider,
+		VolumeTelemetryProvider:   o.telemetryProvider,
 	}
 
 	return &putTestSetup{
-		handler:           handler,
-		repo:              o.repo,
-		chunkStore:        o.chunkStore,
-		healthChecker:     o.volumeHealthChecker,
-		telemetryProvider: o.telemetryProvider,
+		handler:             handler,
+		repo:                o.repo,
+		chunkStore:          o.chunkStore,
+		healthChecker:       o.volumeHealthChecker,
+		telemetryProvider:   o.telemetryProvider,
+		admissionController: o.admissionController,
 	}
 }
 
@@ -75,6 +79,7 @@ type putTestOptions struct {
 	volumeHealthChecker *mockVolumeHealthChecker
 	volumeStatsProvider *mockVolumeStatsProvider
 	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
 	chunkStore          *mockChunkStore
 	volumeID            domain.VolumeID
 	nowFunc             func() time.Time
@@ -106,6 +111,10 @@ func putWithVolumeStatsProvider(provider *mockVolumeStatsProvider) func(*putTest
 
 func putWithTelemetryProvider(provider *mockVolumeTelemetryProvider) func(*putTestOptions) {
 	return func(o *putTestOptions) { o.telemetryProvider = provider }
+}
+
+func putWithAdmissionController(controller *mockVolumeAdmissionController) func(*putTestOptions) {
+	return func(o *putTestOptions) { o.admissionController = controller }
 }
 
 func putWithChunkStore(store *mockChunkStore) func(*putTestOptions) {
@@ -260,10 +269,22 @@ func TestPutChunkHandler_FreshCreate_VolumeHealthErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			volumeState := tt.volumeState
 			setup := newPutTestHandler(
 				putWithHealthChecker(&mockVolumeHealthChecker{
 					checkVolumeHealthFunc: func(v domain.VolumeID) *domain.VolumeHealth {
-						return &domain.VolumeHealth{State: tt.volumeState}
+						return &domain.VolumeHealth{State: volumeState}
+					},
+				}),
+				putWithAdmissionController(&mockVolumeAdmissionController{
+					admitWriteFunc: func(id domain.VolumeID) error {
+						switch volumeState {
+						case domain.VolumeStateDegraded:
+							return volumeerrors.WithState(volumeerrors.ErrDegraded, volumeerrors.StateDegraded)
+						case domain.VolumeStateFailed:
+							return volumeerrors.WithState(volumeerrors.ErrFailed, volumeerrors.StateFailed)
+						}
+						return nil
 					},
 				}),
 			)
@@ -537,11 +558,23 @@ func TestPutChunkHandler_ExistingTemp_VolumeErrors(t *testing.T) {
 			if tt.useVolumeID99 {
 				setup = newPutTestHandler(putWithRepo(repoReturningChunk(existingTemp)))
 			} else {
+				volumeState := tt.volumeState
 				setup = newPutTestHandler(
 					putWithRepo(repoReturningChunk(existingTemp)),
 					putWithHealthChecker(&mockVolumeHealthChecker{
 						checkVolumeHealthFunc: func(v domain.VolumeID) *domain.VolumeHealth {
-							return &domain.VolumeHealth{State: tt.volumeState}
+							return &domain.VolumeHealth{State: volumeState}
+						},
+					}),
+					putWithAdmissionController(&mockVolumeAdmissionController{
+						admitWriteFunc: func(id domain.VolumeID) error {
+							switch volumeState {
+							case domain.VolumeStateDegraded:
+								return volumeerrors.WithState(volumeerrors.ErrDegraded, volumeerrors.StateDegraded)
+							case domain.VolumeStateFailed:
+								return volumeerrors.WithState(volumeerrors.ErrFailed, volumeerrors.StateFailed)
+							}
+							return nil
 						},
 					}),
 				)

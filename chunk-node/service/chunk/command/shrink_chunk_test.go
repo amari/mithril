@@ -15,21 +15,23 @@ import (
 // --- Shrink Test Helpers ---
 
 type shrinkTestSetup struct {
-	handler           *ShrinkChunkHandler
-	repo              *mockChunkRepository
-	chunkStore        *mockChunkStore
-	healthChecker     *mockVolumeHealthChecker
-	telemetryProvider *mockVolumeTelemetryProvider
+	handler             *ShrinkChunkHandler
+	repo                *mockChunkRepository
+	chunkStore          *mockChunkStore
+	healthChecker       *mockVolumeHealthChecker
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
 }
 
 func newShrinkTestHandler(opts ...func(*shrinkTestOptions)) *shrinkTestSetup {
 	o := &shrinkTestOptions{
-		repo:              &mockChunkRepository{},
-		chunkStore:        &mockChunkStore{},
-		healthChecker:     &mockVolumeHealthChecker{},
-		telemetryProvider: &mockVolumeTelemetryProvider{},
-		volumeID:          domain.VolumeID(1),
-		nowFunc:           func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
+		repo:                &mockChunkRepository{},
+		chunkStore:          &mockChunkStore{},
+		healthChecker:       &mockVolumeHealthChecker{},
+		telemetryProvider:   &mockVolumeTelemetryProvider{},
+		admissionController: &mockVolumeAdmissionController{},
+		volumeID:            domain.VolumeID(1),
+		nowFunc:             func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
 	}
 
 	for _, opt := range opts {
@@ -40,29 +42,32 @@ func newShrinkTestHandler(opts ...func(*shrinkTestOptions)) *shrinkTestSetup {
 	volumeManager.AddVolume(&mockVolume{id: o.volumeID, chunkStore: o.chunkStore})
 
 	handler := &ShrinkChunkHandler{
-		Repo:                    o.repo,
-		VolumeHealthChecker:     o.healthChecker,
-		VolumeManager:           volumeManager,
-		VolumeTelemetryProvider: o.telemetryProvider,
-		NowFunc:                 o.nowFunc,
+		Repo:                      o.repo,
+		VolumeAdmissionController: o.admissionController,
+		VolumeHealthChecker:       o.healthChecker,
+		VolumeManager:             volumeManager,
+		VolumeTelemetryProvider:   o.telemetryProvider,
+		NowFunc:                   o.nowFunc,
 	}
 
 	return &shrinkTestSetup{
-		handler:           handler,
-		repo:              o.repo,
-		chunkStore:        o.chunkStore,
-		healthChecker:     o.healthChecker,
-		telemetryProvider: o.telemetryProvider,
+		handler:             handler,
+		repo:                o.repo,
+		chunkStore:          o.chunkStore,
+		healthChecker:       o.healthChecker,
+		telemetryProvider:   o.telemetryProvider,
+		admissionController: o.admissionController,
 	}
 }
 
 type shrinkTestOptions struct {
-	repo              *mockChunkRepository
-	chunkStore        *mockChunkStore
-	healthChecker     *mockVolumeHealthChecker
-	telemetryProvider *mockVolumeTelemetryProvider
-	volumeID          domain.VolumeID
-	nowFunc           func() time.Time
+	repo                *mockChunkRepository
+	chunkStore          *mockChunkStore
+	healthChecker       *mockVolumeHealthChecker
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
+	volumeID            domain.VolumeID
+	nowFunc             func() time.Time
 }
 
 func shrinkWithRepo(repo *mockChunkRepository) func(*shrinkTestOptions) {
@@ -79,6 +84,10 @@ func shrinkWithHealthChecker(checker *mockVolumeHealthChecker) func(*shrinkTestO
 
 func shrinkWithTelemetryProvider(provider *mockVolumeTelemetryProvider) func(*shrinkTestOptions) {
 	return func(o *shrinkTestOptions) { o.telemetryProvider = provider }
+}
+
+func shrinkWithAdmissionController(controller *mockVolumeAdmissionController) func(*shrinkTestOptions) {
+	return func(o *shrinkTestOptions) { o.admissionController = controller }
 }
 
 func shrinkWithVolumeID(id domain.VolumeID) func(*shrinkTestOptions) {
@@ -338,11 +347,23 @@ func TestShrinkChunkHandler_VolumeErrors(t *testing.T) {
 				setup = newShrinkTestHandler(shrinkWithRepo(repoReturningChunk(existing)))
 			} else {
 				existing := makeAvailableChunk([]byte("wk"), 1000, 1)
+				volumeState := tt.volumeState
 				setup = newShrinkTestHandler(
 					shrinkWithRepo(repoReturningChunk(existing)),
 					shrinkWithHealthChecker(&mockVolumeHealthChecker{
 						checkVolumeHealthFunc: func(v domain.VolumeID) *domain.VolumeHealth {
-							return &domain.VolumeHealth{State: tt.volumeState}
+							return &domain.VolumeHealth{State: volumeState}
+						},
+					}),
+					shrinkWithAdmissionController(&mockVolumeAdmissionController{
+						admitWriteFunc: func(id domain.VolumeID) error {
+							switch volumeState {
+							case domain.VolumeStateDegraded:
+								return volumeerrors.WithState(volumeerrors.ErrDegraded, volumeerrors.StateDegraded)
+							case domain.VolumeStateFailed:
+								return volumeerrors.WithState(volumeerrors.ErrFailed, volumeerrors.StateFailed)
+							}
+							return nil
 						},
 					}),
 				)

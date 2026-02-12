@@ -13,16 +13,18 @@ import (
 // --- Stat Test Helpers ---
 
 type statTestSetup struct {
-	handler           *StatChunkHandler
-	healthChecker     *mockVolumeHealthChecker
-	telemetryProvider *mockVolumeTelemetryProvider
+	handler             *StatChunkHandler
+	healthChecker       *mockVolumeHealthChecker
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
 }
 
 func newStatTestHandler(opts ...func(*statTestOptions)) *statTestSetup {
 	o := &statTestOptions{
-		repo:              &mockChunkRepository{},
-		healthChecker:     &mockVolumeHealthChecker{},
-		telemetryProvider: &mockVolumeTelemetryProvider{},
+		repo:                &mockChunkRepository{},
+		healthChecker:       &mockVolumeHealthChecker{},
+		telemetryProvider:   &mockVolumeTelemetryProvider{},
+		admissionController: &mockVolumeAdmissionController{},
 	}
 
 	for _, opt := range opts {
@@ -30,22 +32,25 @@ func newStatTestHandler(opts ...func(*statTestOptions)) *statTestSetup {
 	}
 
 	handler := &StatChunkHandler{
-		Repo:                    o.repo,
-		VolumeHealthChecker:     o.healthChecker,
-		VolumeTelemetryProvider: o.telemetryProvider,
+		Repo:                      o.repo,
+		VolumeAdmissionController: o.admissionController,
+		VolumeHealthChecker:       o.healthChecker,
+		VolumeTelemetryProvider:   o.telemetryProvider,
 	}
 
 	return &statTestSetup{
-		handler:           handler,
-		healthChecker:     o.healthChecker,
-		telemetryProvider: o.telemetryProvider,
+		handler:             handler,
+		healthChecker:       o.healthChecker,
+		telemetryProvider:   o.telemetryProvider,
+		admissionController: o.admissionController,
 	}
 }
 
 type statTestOptions struct {
-	repo              *mockChunkRepository
-	healthChecker     *mockVolumeHealthChecker
-	telemetryProvider *mockVolumeTelemetryProvider
+	repo                *mockChunkRepository
+	healthChecker       *mockVolumeHealthChecker
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
 }
 
 func statWithRepo(repo *mockChunkRepository) func(*statTestOptions) {
@@ -58,6 +63,10 @@ func statWithHealthChecker(checker *mockVolumeHealthChecker) func(*statTestOptio
 
 func statWithTelemetryProvider(provider *mockVolumeTelemetryProvider) func(*statTestOptions) {
 	return func(o *statTestOptions) { o.telemetryProvider = provider }
+}
+
+func statWithAdmissionController(controller *mockVolumeAdmissionController) func(*statTestOptions) {
+	return func(o *statTestOptions) { o.admissionController = controller }
 }
 
 // --- Tests ---

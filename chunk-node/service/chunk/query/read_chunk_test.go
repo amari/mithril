@@ -102,6 +102,35 @@ func (m *mockVolumeTelemetryProvider) GetVolumeLoggerFields(id domain.VolumeID) 
 	return nil
 }
 
+type mockVolumeAdmissionController struct {
+	admitWriteFunc func(id domain.VolumeID) error
+	admitReadFunc  func(id domain.VolumeID) error
+	admitStatFunc  func(id domain.VolumeID) error
+}
+
+var _ portvolume.VolumeAdmissionController = (*mockVolumeAdmissionController)(nil)
+
+func (m *mockVolumeAdmissionController) AdmitWrite(id domain.VolumeID) error {
+	if m.admitWriteFunc != nil {
+		return m.admitWriteFunc(id)
+	}
+	return nil
+}
+
+func (m *mockVolumeAdmissionController) AdmitRead(id domain.VolumeID) error {
+	if m.admitReadFunc != nil {
+		return m.admitReadFunc(id)
+	}
+	return nil
+}
+
+func (m *mockVolumeAdmissionController) AdmitStat(id domain.VolumeID) error {
+	if m.admitStatFunc != nil {
+		return m.admitStatFunc(id)
+	}
+	return nil
+}
+
 type mockChunkStore struct {
 	openChunkFunc func(ctx context.Context, id domain.ChunkID) (port.Chunk, error)
 }
@@ -172,19 +201,21 @@ func makeAvailableChunk(writerKey []byte, size int64, version uint64) *domain.Av
 }
 
 type readTestSetup struct {
-	handler           *ReadChunkHandler
-	chunkStore        *mockChunkStore
-	healthChecker     *mockVolumeHealthChecker
-	telemetryProvider *mockVolumeTelemetryProvider
+	handler             *ReadChunkHandler
+	chunkStore          *mockChunkStore
+	healthChecker       *mockVolumeHealthChecker
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
 }
 
 func newReadTestHandler(opts ...func(*readTestOptions)) *readTestSetup {
 	o := &readTestOptions{
-		repo:              &mockChunkRepository{},
-		chunkStore:        &mockChunkStore{},
-		healthChecker:     &mockVolumeHealthChecker{},
-		telemetryProvider: &mockVolumeTelemetryProvider{},
-		volumeID:          domain.VolumeID(1),
+		repo:                &mockChunkRepository{},
+		chunkStore:          &mockChunkStore{},
+		healthChecker:       &mockVolumeHealthChecker{},
+		telemetryProvider:   &mockVolumeTelemetryProvider{},
+		admissionController: &mockVolumeAdmissionController{},
+		volumeID:            domain.VolumeID(1),
 	}
 
 	for _, opt := range opts {
@@ -195,26 +226,29 @@ func newReadTestHandler(opts ...func(*readTestOptions)) *readTestSetup {
 	volumeManager.AddVolume(&mockVolume{id: o.volumeID, chunkStore: o.chunkStore})
 
 	handler := &ReadChunkHandler{
-		Repo:                    o.repo,
-		VolumeManager:           volumeManager,
-		VolumeHealthChecker:     o.healthChecker,
-		VolumeTelemetryProvider: o.telemetryProvider,
+		Repo:                      o.repo,
+		VolumeManager:             volumeManager,
+		VolumeAdmissionController: o.admissionController,
+		VolumeHealthChecker:       o.healthChecker,
+		VolumeTelemetryProvider:   o.telemetryProvider,
 	}
 
 	return &readTestSetup{
-		handler:           handler,
-		chunkStore:        o.chunkStore,
-		healthChecker:     o.healthChecker,
-		telemetryProvider: o.telemetryProvider,
+		handler:             handler,
+		chunkStore:          o.chunkStore,
+		healthChecker:       o.healthChecker,
+		telemetryProvider:   o.telemetryProvider,
+		admissionController: o.admissionController,
 	}
 }
 
 type readTestOptions struct {
-	repo              *mockChunkRepository
-	chunkStore        *mockChunkStore
-	healthChecker     *mockVolumeHealthChecker
-	telemetryProvider *mockVolumeTelemetryProvider
-	volumeID          domain.VolumeID
+	repo                *mockChunkRepository
+	chunkStore          *mockChunkStore
+	healthChecker       *mockVolumeHealthChecker
+	telemetryProvider   *mockVolumeTelemetryProvider
+	admissionController *mockVolumeAdmissionController
+	volumeID            domain.VolumeID
 }
 
 func readWithRepo(repo *mockChunkRepository) func(*readTestOptions) {
@@ -231,6 +265,10 @@ func readWithHealthChecker(checker *mockVolumeHealthChecker) func(*readTestOptio
 
 func readWithTelemetryProvider(provider *mockVolumeTelemetryProvider) func(*readTestOptions) {
 	return func(o *readTestOptions) { o.telemetryProvider = provider }
+}
+
+func readWithAdmissionController(controller *mockVolumeAdmissionController) func(*readTestOptions) {
+	return func(o *readTestOptions) { o.admissionController = controller }
 }
 
 func readWithVolumeID(id domain.VolumeID) func(*readTestOptions) {
@@ -585,11 +623,21 @@ func TestReadChunkHandler_VolumeErrors(t *testing.T) {
 			if tt.useVolumeID99 {
 				setup = newReadTestHandler(readWithRepo(repo))
 			} else {
+				volumeState := tt.volumeState
 				setup = newReadTestHandler(
 					readWithRepo(repo),
 					readWithHealthChecker(&mockVolumeHealthChecker{
 						checkVolumeHealthFunc: func(v domain.VolumeID) *domain.VolumeHealth {
-							return &domain.VolumeHealth{State: tt.volumeState}
+							return &domain.VolumeHealth{State: volumeState}
+						},
+					}),
+					readWithAdmissionController(&mockVolumeAdmissionController{
+						admitReadFunc: func(id domain.VolumeID) error {
+							switch volumeState {
+							case domain.VolumeStateFailed:
+								return volumeerrors.WithState(volumeerrors.ErrFailed, volumeerrors.StateFailed)
+							}
+							return nil
 						},
 					}),
 				)

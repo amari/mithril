@@ -13,7 +13,6 @@ import (
 	"github.com/amari/mithril/chunk-node/port"
 	"github.com/amari/mithril/chunk-node/port/chunk"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
-	"github.com/amari/mithril/chunk-node/service/admission"
 	"github.com/amari/mithril/chunk-node/service/volume"
 )
 
@@ -28,20 +27,22 @@ type CreateChunkOutput struct {
 }
 
 type CreateChunkHandler struct {
-	Repo                    chunk.ChunkRepository
-	IDGen                   port.ChunkIDGenerator
-	VolumeManager           *volume.VolumeManager
-	VolumePicker            portvolume.VolumePicker
-	NowFunc                 func() time.Time
-	NodeIdentityRepository  port.NodeIdentityRepository
-	VolumeHealthChecker     portvolume.VolumeHealthChecker
-	VolumeStatsProvider     portvolume.VolumeStatsProvider
-	VolumeTelemetryProvider portvolume.VolumeTelemetryProvider
+	Repo                      chunk.ChunkRepository
+	IDGen                     port.ChunkIDGenerator
+	VolumeAdmissionController portvolume.VolumeAdmissionController
+	VolumeManager             *volume.VolumeManager
+	VolumePicker              portvolume.VolumePicker
+	NowFunc                   func() time.Time
+	NodeIdentityRepository    port.NodeIdentityRepository
+	VolumeHealthChecker       portvolume.VolumeHealthChecker
+	VolumeStatsProvider       portvolume.VolumeStatsProvider
+	VolumeTelemetryProvider   portvolume.VolumeTelemetryProvider
 }
 
 func NewCreateChunkHandler(
 	repo chunk.ChunkRepository,
 	idGen port.ChunkIDGenerator,
+	volumeAdmissionController portvolume.VolumeAdmissionController,
 	volumeManager *volume.VolumeManager,
 	volumePicker portvolume.VolumePicker,
 	nodeIdentityRepository port.NodeIdentityRepository,
@@ -50,15 +51,16 @@ func NewCreateChunkHandler(
 	volumeTelemetryProvider portvolume.VolumeTelemetryProvider,
 ) *CreateChunkHandler {
 	return &CreateChunkHandler{
-		Repo:                    repo,
-		IDGen:                   idGen,
-		VolumeManager:           volumeManager,
-		VolumePicker:            volumePicker,
-		NowFunc:                 time.Now,
-		NodeIdentityRepository:  nodeIdentityRepository,
-		VolumeHealthChecker:     volumeHealthChecker,
-		VolumeStatsProvider:     volumeStatsProvider,
-		VolumeTelemetryProvider: volumeTelemetryProvider,
+		Repo:                      repo,
+		IDGen:                     idGen,
+		VolumeAdmissionController: volumeAdmissionController,
+		VolumeManager:             volumeManager,
+		VolumePicker:              volumePicker,
+		NowFunc:                   time.Now,
+		NodeIdentityRepository:    nodeIdentityRepository,
+		VolumeHealthChecker:       volumeHealthChecker,
+		VolumeStatsProvider:       volumeStatsProvider,
+		VolumeTelemetryProvider:   volumeTelemetryProvider,
 	}
 }
 
@@ -98,22 +100,19 @@ func (h *CreateChunkHandler) handleExistingTemp(
 	// Add volume telemetry to context
 	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, c.ID.VolumeID(), h.VolumeTelemetryProvider)
 
-	volHandle, err := h.VolumeManager.GetVolumeByID(c.ID.VolumeID())
-	if err != nil {
-		return nil, err
-	}
-
-	// check the volume health
-	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(c.ChunkID().VolumeID())
-
 	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
-	if err := admission.AdmitWriteWithVolumeHealth(ctx, volumeHealth); err != nil {
+	if err := h.VolumeAdmissionController.AdmitWrite(c.ID.VolumeID()); err != nil {
 		return nil, chunkerrors.WithChunk(
 			err,
 			c.ID,
 			0,
 			0,
 		)
+	}
+
+	volHandle, err := h.VolumeManager.GetVolumeByID(c.ID.VolumeID())
+	if err != nil {
+		return nil, err
 	}
 
 	exists, _ := volHandle.Chunks().ChunkExists(ctx, c.ID)
@@ -199,16 +198,13 @@ func (h *CreateChunkHandler) createFreshChunk(
 	// Add volume telemetry to context
 	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, volID, h.VolumeTelemetryProvider)
 
-	vol, err := h.VolumeManager.GetVolumeByID(volID)
-	if err != nil {
+	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
+	if err := h.VolumeAdmissionController.AdmitWrite(volID); err != nil {
 		return nil, err
 	}
 
-	// check the volume health
-	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(volID)
-
-	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
-	if err := admission.AdmitWriteWithVolumeHealth(ctx, volumeHealth); err != nil {
+	vol, err := h.VolumeManager.GetVolumeByID(volID)
+	if err != nil {
 		return nil, err
 	}
 

@@ -11,7 +11,6 @@ import (
 	"github.com/amari/mithril/chunk-node/port/chunk"
 	portremotechunknode "github.com/amari/mithril/chunk-node/port/remotechunknode"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
-	"github.com/amari/mithril/chunk-node/service/admission"
 	"github.com/amari/mithril/chunk-node/service/volume"
 	"github.com/amari/mithril/chunk-node/volumeerrors"
 	"github.com/rs/zerolog"
@@ -33,28 +32,31 @@ type AppendFromChunkOutput struct {
 }
 
 type AppendFromChunkHandler struct {
-	Repo                    chunk.ChunkRepository
-	VolumeHealthChecker     portvolume.VolumeHealthChecker
-	VolumeManager           *volume.VolumeManager
-	VolumeTelemetryProvider portvolume.VolumeTelemetryProvider
-	RemoteChunkClient       portremotechunknode.RemoteChunkClient
-	NowFunc                 func() time.Time
+	Repo                      chunk.ChunkRepository
+	VolumeAdmissionController portvolume.VolumeAdmissionController
+	VolumeHealthChecker       portvolume.VolumeHealthChecker
+	VolumeManager             *volume.VolumeManager
+	VolumeTelemetryProvider   portvolume.VolumeTelemetryProvider
+	RemoteChunkClient         portremotechunknode.RemoteChunkClient
+	NowFunc                   func() time.Time
 }
 
 func NewAppendFromChunkHandler(
 	repo chunk.ChunkRepository,
+	volumeAdmissionController portvolume.VolumeAdmissionController,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
 	volumeManager *volume.VolumeManager,
 	volumeTelemetryProvider portvolume.VolumeTelemetryProvider,
 	remoteChunkClient portremotechunknode.RemoteChunkClient,
 ) *AppendFromChunkHandler {
 	return &AppendFromChunkHandler{
-		Repo:                    repo,
-		VolumeHealthChecker:     volumeHealthChecker,
-		VolumeManager:           volumeManager,
-		VolumeTelemetryProvider: volumeTelemetryProvider,
-		RemoteChunkClient:       remoteChunkClient,
-		NowFunc:                 time.Now,
+		Repo:                      repo,
+		VolumeAdmissionController: volumeAdmissionController,
+		VolumeHealthChecker:       volumeHealthChecker,
+		VolumeManager:             volumeManager,
+		VolumeTelemetryProvider:   volumeTelemetryProvider,
+		RemoteChunkClient:         remoteChunkClient,
+		NowFunc:                   time.Now,
 	}
 }
 
@@ -74,6 +76,21 @@ func (h *AppendFromChunkHandler) HandleAppendFromChunk(ctx context.Context, inpu
 		return nil, fmt.Errorf("%w: chunk with write key %x is not available", chunkerrors.ErrWrongState, input.WriteKey)
 	}
 
+	volumeID := availableChunk.ID.VolumeID()
+
+	// Add volume telemetry to context
+	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, volumeID, h.VolumeTelemetryProvider)
+
+	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
+	if err := h.VolumeAdmissionController.AdmitWrite(volumeID); err != nil {
+		return nil, chunkerrors.WithChunk(
+			err,
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
+	}
+
 	if availableChunk.Version != input.ExpectedVersion {
 		return nil, chunkerrors.WithChunk(
 			volumeerrors.WithState(chunkerrors.ErrVersionMismatch, h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ID.VolumeID()).State),
@@ -90,19 +107,6 @@ func (h *AppendFromChunkHandler) HandleAppendFromChunk(ctx context.Context, inpu
 	if err != nil {
 		zerolog.Ctx(ctx).Error().Err(err).Msg("failed to get volume handle")
 
-		return nil, chunkerrors.WithChunk(
-			err,
-			availableChunk.ID,
-			availableChunk.Version,
-			availableChunk.Size,
-		)
-	}
-
-	// check the volume health
-	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ChunkID().VolumeID())
-
-	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
-	if err := admission.AdmitWriteWithVolumeHealth(ctx, volumeHealth); err != nil {
 		return nil, chunkerrors.WithChunk(
 			err,
 			availableChunk.ID,

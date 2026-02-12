@@ -10,7 +10,6 @@ import (
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port/chunk"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
-	"github.com/amari/mithril/chunk-node/service/admission"
 	"github.com/amari/mithril/chunk-node/service/volume"
 )
 
@@ -24,25 +23,28 @@ type DeleteChunkOutput struct {
 }
 
 type DeleteChunkHandler struct {
-	Repo                    chunk.ChunkRepository
-	VolumeHealthChecker     portvolume.VolumeHealthChecker
-	VolumeManager           *volume.VolumeManager
-	VolumeTelemetryProvider portvolume.VolumeTelemetryProvider
-	NowFunc                 func() time.Time
+	Repo                      chunk.ChunkRepository
+	VolumeAdmissionController portvolume.VolumeAdmissionController
+	VolumeHealthChecker       portvolume.VolumeHealthChecker
+	VolumeManager             *volume.VolumeManager
+	VolumeTelemetryProvider   portvolume.VolumeTelemetryProvider
+	NowFunc                   func() time.Time
 }
 
 func NewDeleteChunkHandler(
 	repo chunk.ChunkRepository,
+	volumeAdmissionController portvolume.VolumeAdmissionController,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
 	volumeManager *volume.VolumeManager,
 	volumeTelemetryProvider portvolume.VolumeTelemetryProvider,
 ) *DeleteChunkHandler {
 	return &DeleteChunkHandler{
-		Repo:                    repo,
-		VolumeHealthChecker:     volumeHealthChecker,
-		VolumeManager:           volumeManager,
-		VolumeTelemetryProvider: volumeTelemetryProvider,
-		NowFunc:                 time.Now,
+		Repo:                      repo,
+		VolumeAdmissionController: volumeAdmissionController,
+		VolumeHealthChecker:       volumeHealthChecker,
+		VolumeManager:             volumeManager,
+		VolumeTelemetryProvider:   volumeTelemetryProvider,
+		NowFunc:                   time.Now,
 	}
 }
 
@@ -60,22 +62,19 @@ func (h *DeleteChunkHandler) HandleDeleteChunk(ctx context.Context, input *Delet
 	// Add volume telemetry to context
 	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, availableChunk.ID.VolumeID(), h.VolumeTelemetryProvider)
 
+	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
+	if err := h.VolumeAdmissionController.AdmitWrite(availableChunk.ID.VolumeID()); err != nil {
+		return nil, chunkerrors.WithChunk(
+			err,
+			availableChunk.ID,
+			availableChunk.Version,
+			availableChunk.Size,
+		)
+	}
+
 	vol, err := h.VolumeManager.GetVolumeByID(availableChunk.ID.VolumeID())
 	if err != nil {
 		return nil, err
-	}
-
-	// check the volume health
-	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(c.ChunkID().VolumeID())
-
-	// perform admission control check before writing to the volume to avoid writing to a volume that is not healthy enough to accept writes
-	if err := admission.AdmitWriteWithVolumeHealth(ctx, volumeHealth); err != nil {
-		return nil, chunkerrors.WithChunk(
-			err,
-			c.ChunkID(),
-			c.ChunkVersion(),
-			c.ChunkSize(),
-		)
 	}
 
 	if err := vol.Chunks().DeleteChunk(ctx, availableChunk.ID); err != nil {

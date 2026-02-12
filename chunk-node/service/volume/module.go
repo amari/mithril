@@ -30,6 +30,9 @@ type ConfigVolumeDirectory struct {
 
 func Module(directoryVolumePaths []string) fx.Option {
 	return fx.Module("service.volume",
+		fx.Provide(
+			NewVolumeAdmissionController,
+		),
 		fx.Provide(NewVolumeManager),
 		fx.Provide(func(log *zerolog.Logger, lc fx.Lifecycle) (*VolumeStatsManager, portvolume.VolumeStatsProvider) {
 			statsManager := NewVolumeStatsManager(log)
