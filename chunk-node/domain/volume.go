@@ -55,7 +55,7 @@ const (
 	// MediumTypeRotational indicates a spinning disk (HDD).
 	MediumTypeRotational MediumType = "rotational"
 	// MediumTypeSolidState indicates flash storage (SSD).
-	MediumTypeSolidState MediumType = "solidstate"
+	MediumTypeSolidState MediumType = "solid-state"
 )
 
 // InterconnectType describes the physical or network layer connecting a storage device.
@@ -64,7 +64,7 @@ type InterconnectType string
 
 const (
 	// InterconnectTypeFibreChannel indicates a Fibre Channel connection.
-	InterconnectTypeFibreChannel InterconnectType = "fibrechannel"
+	InterconnectTypeFibreChannel InterconnectType = "fibre-channel"
 	// InterconnectTypeFireWire indicates an IEEE 1394 (FireWire) connection.
 	InterconnectTypeFireWire InterconnectType = "firewire"
 	// InterconnectTypeInfiniBand indicates an InfiniBand connection.
@@ -72,7 +72,7 @@ const (
 	// InterconnectTypePATA indicates a Parallel ATA (IDE) connection.
 	InterconnectTypePATA InterconnectType = "pata"
 	// InterconnectTypePCIExpress indicates a PCI Express connection.
-	InterconnectTypePCIExpress InterconnectType = "pciexpress"
+	InterconnectTypePCIExpress InterconnectType = "pci-express"
 	// InterconnectTypeRDMA indicates an RDMA connection (e.g., RoCE, iWARP).
 	InterconnectTypeRDMA InterconnectType = "rdma"
 	// InterconnectTypeSAS indicates a Serial Attached SCSI connection.
