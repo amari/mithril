@@ -70,6 +70,9 @@ func Module(directoryVolumePaths []string) fx.Option {
 			func(svc *VolumeService) portvolume.VolumeCharacteristicsProvider {
 				return svc
 			},
+			func(ht *VolumeHealthTracker) portvolume.VolumeHealthProvider {
+				return ht
+			},
 			func(svc *VolumeService) portvolume.VolumeTelemetryProvider {
 				return svc
 			},

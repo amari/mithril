@@ -795,3 +795,8 @@ func defaultHealthConfig() HealthConfig {
 		StuckEpochThreshold:  3,                      // 3 epochs stuck → Degraded
 	}
 }
+
+// GetVolumeHealth implements VolumeHealthProvider.
+func (t *VolumeHealthTracker) GetVolumeHealth(id domain.VolumeID) *domain.VolumeHealth {
+	return t.CheckVolumeHealth(id)
+}
