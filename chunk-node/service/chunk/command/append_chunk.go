@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	adaptervolumetelemetry "github.com/amari/mithril/chunk-node/adapter/volume/telemetry"
 	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port/chunk"
@@ -30,16 +31,18 @@ type AppendChunkOutput struct {
 }
 
 type AppendChunkHandler struct {
-	Repo                chunk.ChunkRepository
-	VolumeHealthChecker portvolume.VolumeHealthChecker
-	VolumeManager       *volume.VolumeManager
-	NowFunc             func() time.Time
+	Repo                    chunk.ChunkRepository
+	VolumeHealthChecker     portvolume.VolumeHealthChecker
+	VolumeManager           *volume.VolumeManager
+	VolumeTelemetryProvider portvolume.VolumeTelemetryProvider
+	NowFunc                 func() time.Time
 }
 
 func NewAppendChunkHandler(
 	repo chunk.ChunkRepository,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
 	volumeManager *volume.VolumeManager,
+	volumeTelemetryProvider portvolume.VolumeTelemetryProvider,
 ) *AppendChunkHandler {
 	return &AppendChunkHandler{
 		Repo:                repo,
@@ -59,6 +62,9 @@ func (h *AppendChunkHandler) HandleAppendChunk(ctx context.Context, input *Appen
 	if !ok {
 		return nil, fmt.Errorf("%w: chunk with write key %x is not available", chunkerrors.ErrWrongState, input.WriteKey)
 	}
+
+	// Add volume telemetry to context
+	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, availableChunk.ID.VolumeID(), h.VolumeTelemetryProvider)
 
 	if availableChunk.Version != input.ExpectedVersion {
 		return nil, chunkerrors.WithChunk(

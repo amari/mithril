@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 
+	adaptervolumetelemetry "github.com/amari/mithril/chunk-node/adapter/volume/telemetry"
 	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port/chunk"
@@ -20,17 +21,20 @@ type StatChunkOutput struct {
 }
 
 type StatChunkHandler struct {
-	Repo                chunk.ChunkRepository
-	VolumeHealthChecker volume.VolumeHealthChecker
+	Repo                    chunk.ChunkRepository
+	VolumeHealthChecker     volume.VolumeHealthChecker
+	VolumeTelemetryProvider volume.VolumeTelemetryProvider
 }
 
 func NewStatChunkHandler(
 	repo chunk.ChunkRepository,
 	volumeHealthChecker volume.VolumeHealthChecker,
+	volumeTelemetryProvider volume.VolumeTelemetryProvider,
 ) *StatChunkHandler {
 	return &StatChunkHandler{
-		Repo:                repo,
-		VolumeHealthChecker: volumeHealthChecker,
+		Repo:                    repo,
+		VolumeHealthChecker:     volumeHealthChecker,
+		VolumeTelemetryProvider: volumeTelemetryProvider,
 	}
 }
 
@@ -63,6 +67,9 @@ func (h *StatChunkHandler) HandleStatChunk(ctx context.Context, input *StatChunk
 	if !ok {
 		return nil, chunkerrors.ErrWrongState
 	}
+
+	// Add volume telemetry to context
+	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, availableChunk.ID.VolumeID(), h.VolumeTelemetryProvider)
 
 	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(availableChunk.ChunkID().VolumeID())
 

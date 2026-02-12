@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	adaptervolumetelemetry "github.com/amari/mithril/chunk-node/adapter/volume/telemetry"
 	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port/chunk"
@@ -32,25 +33,28 @@ type AppendFromChunkOutput struct {
 }
 
 type AppendFromChunkHandler struct {
-	Repo                chunk.ChunkRepository
-	VolumeHealthChecker portvolume.VolumeHealthChecker
-	VolumeManager       *volume.VolumeManager
-	RemoteChunkClient   portremotechunknode.RemoteChunkClient
-	NowFunc             func() time.Time
+	Repo                    chunk.ChunkRepository
+	VolumeHealthChecker     portvolume.VolumeHealthChecker
+	VolumeManager           *volume.VolumeManager
+	VolumeTelemetryProvider portvolume.VolumeTelemetryProvider
+	RemoteChunkClient       portremotechunknode.RemoteChunkClient
+	NowFunc                 func() time.Time
 }
 
 func NewAppendFromChunkHandler(
 	repo chunk.ChunkRepository,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
 	volumeManager *volume.VolumeManager,
+	volumeTelemetryProvider portvolume.VolumeTelemetryProvider,
 	remoteChunkClient portremotechunknode.RemoteChunkClient,
 ) *AppendFromChunkHandler {
 	return &AppendFromChunkHandler{
-		Repo:                repo,
-		VolumeHealthChecker: volumeHealthChecker,
-		VolumeManager:       volumeManager,
-		RemoteChunkClient:   remoteChunkClient,
-		NowFunc:             time.Now,
+		Repo:                    repo,
+		VolumeHealthChecker:     volumeHealthChecker,
+		VolumeManager:           volumeManager,
+		VolumeTelemetryProvider: volumeTelemetryProvider,
+		RemoteChunkClient:       remoteChunkClient,
+		NowFunc:                 time.Now,
 	}
 }
 
@@ -78,6 +82,9 @@ func (h *AppendFromChunkHandler) HandleAppendFromChunk(ctx context.Context, inpu
 			availableChunk.Size,
 		)
 	}
+
+	// Add volume telemetry to context
+	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, availableChunk.ID.VolumeID(), h.VolumeTelemetryProvider)
 
 	vol, err := h.VolumeManager.GetVolumeByID(availableChunk.ID.VolumeID())
 	if err != nil {

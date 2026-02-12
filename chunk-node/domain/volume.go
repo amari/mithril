@@ -45,6 +45,7 @@ type VolumeCharacteristics struct {
 	Vendor       string
 	Model        string
 	SerialNumber string
+	// TODO: filesystem type (APFS, XFS, etc.)
 }
 
 // MediumType describes the physical storage medium.

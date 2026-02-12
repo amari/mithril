@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	adaptervolumetelemetry "github.com/amari/mithril/chunk-node/adapter/volume/telemetry"
 	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port/chunk"
@@ -23,22 +24,25 @@ type DeleteChunkOutput struct {
 }
 
 type DeleteChunkHandler struct {
-	Repo                chunk.ChunkRepository
-	VolumeHealthChecker portvolume.VolumeHealthChecker
-	VolumeManager       *volume.VolumeManager
-	NowFunc             func() time.Time
+	Repo                    chunk.ChunkRepository
+	VolumeHealthChecker     portvolume.VolumeHealthChecker
+	VolumeManager           *volume.VolumeManager
+	VolumeTelemetryProvider portvolume.VolumeTelemetryProvider
+	NowFunc                 func() time.Time
 }
 
 func NewDeleteChunkHandler(
 	repo chunk.ChunkRepository,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
 	volumeManager *volume.VolumeManager,
+	volumeTelemetryProvider portvolume.VolumeTelemetryProvider,
 ) *DeleteChunkHandler {
 	return &DeleteChunkHandler{
-		Repo:                repo,
-		VolumeHealthChecker: volumeHealthChecker,
-		VolumeManager:       volumeManager,
-		NowFunc:             time.Now,
+		Repo:                    repo,
+		VolumeHealthChecker:     volumeHealthChecker,
+		VolumeManager:           volumeManager,
+		VolumeTelemetryProvider: volumeTelemetryProvider,
+		NowFunc:                 time.Now,
 	}
 }
 
@@ -52,6 +56,9 @@ func (h *DeleteChunkHandler) HandleDeleteChunk(ctx context.Context, input *Delet
 	if !ok {
 		return nil, chunkerrors.ErrWrongState
 	}
+
+	// Add volume telemetry to context
+	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, availableChunk.ID.VolumeID(), h.VolumeTelemetryProvider)
 
 	vol, err := h.VolumeManager.GetVolumeByID(availableChunk.ID.VolumeID())
 	if err != nil {

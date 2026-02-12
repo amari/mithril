@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/amari/mithril/chunk-node/adapter/volume/picker"
+	adaptervolumetelemetry "github.com/amari/mithril/chunk-node/adapter/volume/telemetry"
 	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port"
@@ -30,14 +31,15 @@ type PutChunkOutput struct {
 }
 
 type PutChunkHandler struct {
-	Repo                   chunk.ChunkRepository
-	IDGen                  port.ChunkIDGenerator
-	VolumeManager          *volume.VolumeManager
-	VolumePicker           portvolume.VolumePicker
-	NowFunc                func() time.Time
-	NodeIdentityRepository port.NodeIdentityRepository
-	VolumeHealthChecker    portvolume.VolumeHealthChecker
-	VolumeStatsProvider    portvolume.VolumeStatsProvider
+	Repo                    chunk.ChunkRepository
+	IDGen                   port.ChunkIDGenerator
+	VolumeManager           *volume.VolumeManager
+	VolumePicker            portvolume.VolumePicker
+	NowFunc                 func() time.Time
+	NodeIdentityRepository  port.NodeIdentityRepository
+	VolumeHealthChecker     portvolume.VolumeHealthChecker
+	VolumeStatsProvider     portvolume.VolumeStatsProvider
+	VolumeTelemetryProvider portvolume.VolumeTelemetryProvider
 }
 
 func NewPutChunkHandler(
@@ -48,16 +50,18 @@ func NewPutChunkHandler(
 	nodeIdentityRepository port.NodeIdentityRepository,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
 	volumeStatsProvider portvolume.VolumeStatsProvider,
+	volumeTelemetryProvider portvolume.VolumeTelemetryProvider,
 ) *PutChunkHandler {
 	return &PutChunkHandler{
-		Repo:                   repo,
-		IDGen:                  idGen,
-		VolumeManager:          volumeManager,
-		VolumePicker:           volumePicker,
-		NowFunc:                time.Now,
-		NodeIdentityRepository: nodeIdentityRepository,
-		VolumeHealthChecker:    volumeHealthChecker,
-		VolumeStatsProvider:    volumeStatsProvider,
+		Repo:                    repo,
+		IDGen:                   idGen,
+		VolumeManager:           volumeManager,
+		VolumePicker:            volumePicker,
+		NowFunc:                 time.Now,
+		NodeIdentityRepository:  nodeIdentityRepository,
+		VolumeHealthChecker:     volumeHealthChecker,
+		VolumeStatsProvider:     volumeStatsProvider,
+		VolumeTelemetryProvider: volumeTelemetryProvider,
 	}
 }
 
@@ -94,6 +98,9 @@ func (h *PutChunkHandler) handleExistingTemp(
 	c *domain.TempChunk,
 	input *PutChunkInput,
 ) (*PutChunkOutput, error) {
+
+	// Add volume telemetry to context
+	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, c.ID.VolumeID(), h.VolumeTelemetryProvider)
 
 	volHandle, err := h.VolumeManager.GetVolumeByID(c.ID.VolumeID())
 	if err != nil {
@@ -187,6 +194,9 @@ func (h *PutChunkHandler) createFreshChunk(
 	if err != nil {
 		return nil, err
 	}
+
+	// Add volume telemetry to context
+	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, vol, h.VolumeTelemetryProvider)
 
 	// check the volume health
 	volumeHealth := h.VolumeHealthChecker.CheckVolumeHealth(vol)

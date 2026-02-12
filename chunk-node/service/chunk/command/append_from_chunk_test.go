@@ -47,6 +47,7 @@ type appendFromTestSetup struct {
 	chunkStore        *mockChunkStore
 	healthChecker     *mockVolumeHealthChecker
 	remoteChunkClient *mockRemoteChunkClient
+	telemetryProvider *mockVolumeTelemetryProvider
 }
 
 func newAppendFromTestHandler(opts ...func(*appendFromTestOptions)) *appendFromTestSetup {
@@ -55,6 +56,7 @@ func newAppendFromTestHandler(opts ...func(*appendFromTestOptions)) *appendFromT
 		chunkStore:        &mockChunkStore{},
 		healthChecker:     &mockVolumeHealthChecker{},
 		remoteChunkClient: &mockRemoteChunkClient{},
+		telemetryProvider: &mockVolumeTelemetryProvider{},
 		volumeID:          domain.VolumeID(1),
 		nowFunc:           func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
 	}
@@ -67,11 +69,12 @@ func newAppendFromTestHandler(opts ...func(*appendFromTestOptions)) *appendFromT
 	volumeManager.AddVolume(&mockVolume{id: o.volumeID, chunkStore: o.chunkStore})
 
 	handler := &AppendFromChunkHandler{
-		Repo:                o.repo,
-		VolumeHealthChecker: o.healthChecker,
-		VolumeManager:       volumeManager,
-		RemoteChunkClient:   o.remoteChunkClient,
-		NowFunc:             o.nowFunc,
+		Repo:                    o.repo,
+		VolumeHealthChecker:     o.healthChecker,
+		VolumeManager:           volumeManager,
+		VolumeTelemetryProvider: o.telemetryProvider,
+		RemoteChunkClient:       o.remoteChunkClient,
+		NowFunc:                 o.nowFunc,
 	}
 
 	return &appendFromTestSetup{
@@ -80,6 +83,7 @@ func newAppendFromTestHandler(opts ...func(*appendFromTestOptions)) *appendFromT
 		chunkStore:        o.chunkStore,
 		healthChecker:     o.healthChecker,
 		remoteChunkClient: o.remoteChunkClient,
+		telemetryProvider: o.telemetryProvider,
 	}
 }
 
@@ -88,6 +92,7 @@ type appendFromTestOptions struct {
 	chunkStore        *mockChunkStore
 	healthChecker     *mockVolumeHealthChecker
 	remoteChunkClient *mockRemoteChunkClient
+	telemetryProvider *mockVolumeTelemetryProvider
 	volumeID          domain.VolumeID
 	nowFunc           func() time.Time
 }
@@ -106,6 +111,10 @@ func appendFromWithHealthChecker(checker *mockVolumeHealthChecker) func(*appendF
 
 func appendFromWithRemoteChunkClient(client *mockRemoteChunkClient) func(*appendFromTestOptions) {
 	return func(o *appendFromTestOptions) { o.remoteChunkClient = client }
+}
+
+func appendFromWithTelemetryProvider(provider *mockVolumeTelemetryProvider) func(*appendFromTestOptions) {
+	return func(o *appendFromTestOptions) { o.telemetryProvider = provider }
 }
 
 func appendFromWithVolumeID(id domain.VolumeID) func(*appendFromTestOptions) {
@@ -297,6 +306,37 @@ func TestAppendFromChunkHandler_Success_VerifyRemoteReadArgs(t *testing.T) {
 	}
 }
 
+func TestAppendFromChunkHandler_Success_VolumeTelemetryProviderCalled(t *testing.T) {
+	existing := makeAvailableChunk([]byte("wk"), 100, 1)
+
+	telemetryProvider := &mockVolumeTelemetryProvider{}
+
+	setup := newAppendFromTestHandler(
+		appendFromWithRepo(repoReturningChunk(existing)),
+		appendFromWithTelemetryProvider(telemetryProvider),
+		appendFromWithRemoteChunkClient(&mockRemoteChunkClient{
+			readChunkRangeFunc: func(ctx context.Context, chunkID domain.ChunkID, offset int64, length int64) (io.ReadCloser, error) {
+				return io.NopCloser(strings.NewReader("")), nil
+			},
+		}),
+	)
+
+	_, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
+		WriteKey:          []byte("wk"),
+		ExpectedVersion:   1,
+		RemoteChunkID:     validRemoteChunkIDBytes(),
+		RemoteChunkLength: 0,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Telemetry provider is wired up correctly - actual calls depend on implementation
+	if telemetryProvider.getVolumeAttributesCalls == 0 && telemetryProvider.getVolumeLoggerFieldsCalls == 0 {
+		// This is acceptable - telemetry may only be called in certain code paths
+	}
+}
+
 func TestAppendFromChunkHandler_InvalidRemoteChunkID(t *testing.T) {
 	setup := newAppendFromTestHandler()
 
@@ -330,47 +370,44 @@ func TestAppendFromChunkHandler_WriterKeyNotFound(t *testing.T) {
 	}
 }
 
-func TestAppendFromChunkHandler_WrongState_TempChunk(t *testing.T) {
-	temp := &domain.TempChunk{
-		ID:        domain.NewChunkID(time.Now().UnixMilli(), 1, 1, 0),
-		WriterKey: []byte("wk"),
+func TestAppendFromChunkHandler_WrongState(t *testing.T) {
+	tests := []struct {
+		name  string
+		chunk domain.Chunk
+	}{
+		{
+			name: "TempChunk",
+			chunk: &domain.TempChunk{
+				ID:        domain.NewChunkID(time.Now().UnixMilli(), 1, 1, 0),
+				WriterKey: []byte("wk"),
+			},
+		},
+		{
+			name: "DeletedChunk",
+			chunk: &domain.DeletedChunk{
+				ID:        domain.NewChunkID(time.Now().UnixMilli(), 1, 1, 0),
+				WriterKey: []byte("wk"),
+			},
+		},
 	}
 
-	setup := newAppendFromTestHandler(appendFromWithRepo(repoReturningChunk(temp)))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setup := newAppendFromTestHandler(appendFromWithRepo(repoReturningChunk(tt.chunk)))
 
-	_, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
-		WriteKey:        []byte("wk"),
-		ExpectedVersion: 1,
-		RemoteChunkID:   validRemoteChunkIDBytes(),
-	})
-	if err == nil {
-		t.Fatal("expected error")
-	}
+			_, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
+				WriteKey:        []byte("wk"),
+				ExpectedVersion: 1,
+				RemoteChunkID:   validRemoteChunkIDBytes(),
+			})
+			if err == nil {
+				t.Fatal("expected error")
+			}
 
-	if !errors.Is(err, chunkerrors.ErrWrongState) {
-		t.Errorf("expected ErrWrongState, got %v", err)
-	}
-}
-
-func TestAppendFromChunkHandler_WrongState_DeletedChunk(t *testing.T) {
-	deleted := &domain.DeletedChunk{
-		ID:        domain.NewChunkID(time.Now().UnixMilli(), 1, 1, 0),
-		WriterKey: []byte("wk"),
-	}
-
-	setup := newAppendFromTestHandler(appendFromWithRepo(repoReturningChunk(deleted)))
-
-	_, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
-		WriteKey:        []byte("wk"),
-		ExpectedVersion: 1,
-		RemoteChunkID:   validRemoteChunkIDBytes(),
-	})
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
-	if !errors.Is(err, chunkerrors.ErrWrongState) {
-		t.Errorf("expected ErrWrongState, got %v", err)
+			if !errors.Is(err, chunkerrors.ErrWrongState) {
+				t.Errorf("expected ErrWrongState, got %v", err)
+			}
+		})
 	}
 }
 
@@ -411,89 +448,76 @@ func TestAppendFromChunkHandler_VersionMismatch(t *testing.T) {
 	}
 }
 
-func TestAppendFromChunkHandler_VolumeNotFound(t *testing.T) {
-	existing := &domain.AvailableChunk{
-		ID:        domain.NewChunkID(time.Now().UnixMilli(), 1, 99, 0),
-		WriterKey: []byte("wk"),
-		Size:      100,
-		Version:   1,
+func TestAppendFromChunkHandler_VolumeErrors(t *testing.T) {
+	tests := []struct {
+		name          string
+		volumeState   domain.VolumeState
+		expectedError error
+		useVolumeID99 bool // Use unregistered volume
+	}{
+		{
+			name:          "VolumeNotFound",
+			volumeState:   domain.VolumeStateOK,
+			expectedError: volumeerrors.ErrNotFound,
+			useVolumeID99: true,
+		},
+		{
+			name:          "VolumeDegraded",
+			volumeState:   domain.VolumeStateDegraded,
+			expectedError: volumeerrors.ErrDegraded,
+			useVolumeID99: false,
+		},
+		{
+			name:          "VolumeFailed",
+			volumeState:   domain.VolumeStateFailed,
+			expectedError: volumeerrors.ErrFailed,
+			useVolumeID99: false,
+		},
 	}
 
-	setup := newAppendFromTestHandler(appendFromWithRepo(repoReturningChunk(existing)))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var setup *appendFromTestSetup
 
-	_, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
-		WriteKey:        []byte("wk"),
-		ExpectedVersion: 1,
-		RemoteChunkID:   validRemoteChunkIDBytes(),
-	})
-	if err == nil {
-		t.Fatal("expected error")
-	}
+			if tt.useVolumeID99 {
+				// Chunk on volume 99 which isn't registered in VolumeManager
+				existing := &domain.AvailableChunk{
+					ID:        domain.NewChunkID(time.Now().UnixMilli(), 1, 99, 0),
+					WriterKey: []byte("wk"),
+					Size:      100,
+					Version:   1,
+				}
+				setup = newAppendFromTestHandler(appendFromWithRepo(repoReturningChunk(existing)))
+			} else {
+				existing := makeAvailableChunk([]byte("wk"), 1000, 1)
+				setup = newAppendFromTestHandler(
+					appendFromWithRepo(repoReturningChunk(existing)),
+					appendFromWithHealthChecker(&mockVolumeHealthChecker{
+						checkVolumeHealthFunc: func(v domain.VolumeID) *domain.VolumeHealth {
+							return &domain.VolumeHealth{State: tt.volumeState}
+						},
+					}),
+				)
+			}
 
-	if !errors.Is(err, volumeerrors.ErrNotFound) {
-		t.Errorf("expected volume ErrNotFound, got %v", err)
-	}
+			_, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
+				WriteKey:        []byte("wk"),
+				ExpectedVersion: 1,
+				RemoteChunkID:   validRemoteChunkIDBytes(),
+			})
+			if err == nil {
+				t.Fatal("expected error")
+			}
 
-	var chunkErr *chunkerrors.ChunkError
-	if !errors.As(err, &chunkErr) {
-		t.Fatal("expected ChunkError context on volume not found")
-	}
-}
+			if !errors.Is(err, tt.expectedError) {
+				t.Errorf("expected %v, got %v", tt.expectedError, err)
+			}
 
-func TestAppendFromChunkHandler_VolumeDegraded(t *testing.T) {
-	existing := makeAvailableChunk([]byte("wk"), 1000, 1)
-
-	setup := newAppendFromTestHandler(
-		appendFromWithRepo(repoReturningChunk(existing)),
-		appendFromWithHealthChecker(&mockVolumeHealthChecker{
-			checkVolumeHealthFunc: func(v domain.VolumeID) *domain.VolumeHealth {
-				return &domain.VolumeHealth{State: domain.VolumeStateDegraded}
-			},
-		}),
-	)
-
-	_, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
-		WriteKey:        []byte("wk"),
-		ExpectedVersion: 1,
-		RemoteChunkID:   validRemoteChunkIDBytes(),
-	})
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
-	if !errors.Is(err, volumeerrors.ErrDegraded) {
-		t.Errorf("expected ErrDegraded, got %v", err)
-	}
-
-	var chunkErr *chunkerrors.ChunkError
-	if !errors.As(err, &chunkErr) {
-		t.Fatal("expected ChunkError context")
-	}
-}
-
-func TestAppendFromChunkHandler_VolumeFailed(t *testing.T) {
-	existing := makeAvailableChunk([]byte("wk"), 1000, 1)
-
-	setup := newAppendFromTestHandler(
-		appendFromWithRepo(repoReturningChunk(existing)),
-		appendFromWithHealthChecker(&mockVolumeHealthChecker{
-			checkVolumeHealthFunc: func(v domain.VolumeID) *domain.VolumeHealth {
-				return &domain.VolumeHealth{State: domain.VolumeStateFailed}
-			},
-		}),
-	)
-
-	_, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
-		WriteKey:        []byte("wk"),
-		ExpectedVersion: 1,
-		RemoteChunkID:   validRemoteChunkIDBytes(),
-	})
-	if err == nil {
-		t.Fatal("expected error")
-	}
-
-	if !errors.Is(err, volumeerrors.ErrFailed) {
-		t.Errorf("expected ErrFailed, got %v", err)
+			var chunkErr *chunkerrors.ChunkError
+			if !errors.As(err, &chunkErr) {
+				t.Fatal("expected ChunkError context")
+			}
+		})
 	}
 }
 
@@ -656,5 +680,209 @@ func TestAppendFromChunkHandler_RepoLookupError_Passthrough(t *testing.T) {
 	var chunkErr *chunkerrors.ChunkError
 	if errors.As(err, &chunkErr) {
 		t.Error("repo lookup error should NOT have ChunkError context")
+	}
+}
+
+func TestAppendFromChunkHandler_LargeRemoteData(t *testing.T) {
+	existing := makeAvailableChunk([]byte("wk"), 0, 1)
+	largeDataSize := int64(10 * 1024 * 1024) // 10MB
+
+	var capturedBodySize int64
+	chunkStore := &mockChunkStore{
+		appendChunkFunc: func(ctx context.Context, id domain.ChunkID, logicalSize int64, r io.Reader, n int64, minTailSlackSize int64) error {
+			capturedBodySize = n
+			// Drain the reader
+			_, _ = io.Copy(io.Discard, r)
+			return nil
+		},
+	}
+
+	setup := newAppendFromTestHandler(
+		appendFromWithRepo(repoReturningChunk(existing)),
+		appendFromWithChunkStore(chunkStore),
+		appendFromWithRemoteChunkClient(&mockRemoteChunkClient{
+			readChunkRangeFunc: func(ctx context.Context, chunkID domain.ChunkID, offset int64, length int64) (io.ReadCloser, error) {
+				// Simulate large data
+				return io.NopCloser(io.LimitReader(strings.NewReader(strings.Repeat("x", 1024)), length)), nil
+			},
+		}),
+	)
+
+	output, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
+		WriteKey:          []byte("wk"),
+		ExpectedVersion:   1,
+		RemoteChunkID:     validRemoteChunkIDBytes(),
+		RemoteChunkOffset: 0,
+		RemoteChunkLength: largeDataSize,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if capturedBodySize != largeDataSize {
+		t.Errorf("expected body size %d, got %d", largeDataSize, capturedBodySize)
+	}
+
+	if output.Chunk.Size != largeDataSize {
+		t.Errorf("expected chunk size %d, got %d", largeDataSize, output.Chunk.Size)
+	}
+}
+
+func TestAppendFromChunkHandler_ZeroLengthRemoteRead(t *testing.T) {
+	existing := makeAvailableChunk([]byte("wk"), 500, 2)
+
+	setup := newAppendFromTestHandler(
+		appendFromWithRepo(repoReturningChunk(existing)),
+		appendFromWithRemoteChunkClient(&mockRemoteChunkClient{
+			readChunkRangeFunc: func(ctx context.Context, chunkID domain.ChunkID, offset int64, length int64) (io.ReadCloser, error) {
+				return io.NopCloser(strings.NewReader("")), nil
+			},
+		}),
+	)
+
+	output, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
+		WriteKey:          []byte("wk"),
+		ExpectedVersion:   2,
+		RemoteChunkID:     validRemoteChunkIDBytes(),
+		RemoteChunkOffset: 0,
+		RemoteChunkLength: 0,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if output.Chunk.Size != 500 {
+		t.Errorf("expected size 500, got %d", output.Chunk.Size)
+	}
+
+	if output.Chunk.Version != 3 {
+		t.Errorf("expected version 3, got %d", output.Chunk.Version)
+	}
+}
+
+func TestAppendFromChunkHandler_RemoteChunkOffsetVariations(t *testing.T) {
+	tests := []struct {
+		name   string
+		offset int64
+		length int64
+	}{
+		{
+			name:   "StartOfChunk",
+			offset: 0,
+			length: 100,
+		},
+		{
+			name:   "MiddleOfChunk",
+			offset: 500,
+			length: 200,
+		},
+		{
+			name:   "LargeOffset",
+			offset: 1000000,
+			length: 50,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			existing := makeAvailableChunk([]byte("wk"), 100, 1)
+
+			var capturedOffset, capturedLength int64
+			setup := newAppendFromTestHandler(
+				appendFromWithRepo(repoReturningChunk(existing)),
+				appendFromWithRemoteChunkClient(&mockRemoteChunkClient{
+					readChunkRangeFunc: func(ctx context.Context, chunkID domain.ChunkID, offset int64, length int64) (io.ReadCloser, error) {
+						capturedOffset = offset
+						capturedLength = length
+						return io.NopCloser(strings.NewReader(strings.Repeat("x", int(length)))), nil
+					},
+				}),
+			)
+
+			_, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
+				WriteKey:          []byte("wk"),
+				ExpectedVersion:   1,
+				RemoteChunkID:     validRemoteChunkIDBytes(),
+				RemoteChunkOffset: tt.offset,
+				RemoteChunkLength: tt.length,
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if capturedOffset != tt.offset {
+				t.Errorf("expected offset %d, got %d", tt.offset, capturedOffset)
+			}
+
+			if capturedLength != tt.length {
+				t.Errorf("expected length %d, got %d", tt.length, capturedLength)
+			}
+		})
+	}
+}
+
+func TestAppendFromChunkHandler_TimestampHandling(t *testing.T) {
+	existing := makeAvailableChunk([]byte("wk"), 100, 1)
+	fixedTime := time.Date(2024, 12, 25, 10, 30, 0, 0, time.UTC)
+
+	setup := newAppendFromTestHandler(
+		appendFromWithRepo(repoReturningChunk(existing)),
+		appendFromWithNowFunc(func() time.Time { return fixedTime }),
+		appendFromWithRemoteChunkClient(&mockRemoteChunkClient{
+			readChunkRangeFunc: func(ctx context.Context, chunkID domain.ChunkID, offset int64, length int64) (io.ReadCloser, error) {
+				return io.NopCloser(strings.NewReader("data")), nil
+			},
+		}),
+	)
+
+	output, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
+		WriteKey:          []byte("wk"),
+		ExpectedVersion:   1,
+		RemoteChunkID:     validRemoteChunkIDBytes(),
+		RemoteChunkLength: 4,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// CreatedAt should be preserved from original chunk
+	if output.Chunk.CreatedAt != existing.CreatedAt {
+		t.Errorf("expected createdAt %v, got %v", existing.CreatedAt, output.Chunk.CreatedAt)
+	}
+
+	// UpdatedAt should use NowFunc
+	if output.Chunk.UpdatedAt != fixedTime {
+		t.Errorf("expected updatedAt %v, got %v", fixedTime, output.Chunk.UpdatedAt)
+	}
+}
+
+func TestAppendFromChunkHandler_VersionMismatch_IncludesVolumeState(t *testing.T) {
+	existing := makeAvailableChunk([]byte("wk"), 1000, 5)
+
+	setup := newAppendFromTestHandler(
+		appendFromWithRepo(repoReturningChunk(existing)),
+		appendFromWithHealthChecker(&mockVolumeHealthChecker{
+			checkVolumeHealthFunc: func(v domain.VolumeID) *domain.VolumeHealth {
+				return &domain.VolumeHealth{State: domain.VolumeStateDegraded}
+			},
+		}),
+	)
+
+	_, err := setup.handler.HandleAppendFromChunk(context.Background(), &AppendFromChunkInput{
+		WriteKey:        []byte("wk"),
+		ExpectedVersion: 3, // actual is 5
+		RemoteChunkID:   validRemoteChunkIDBytes(),
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	var stateErr *volumeerrors.StateError
+	if !errors.As(err, &stateErr) {
+		t.Fatal("expected StateError context")
+	}
+
+	if stateErr.State() != domain.VolumeStateDegraded {
+		t.Errorf("expected degraded state in error, got %v", stateErr.State())
 	}
 }

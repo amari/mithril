@@ -3,6 +3,7 @@ package query
 import (
 	"context"
 
+	adaptervolumetelemetry "github.com/amari/mithril/chunk-node/adapter/volume/telemetry"
 	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port"
@@ -27,20 +28,23 @@ type ReadChunkOutput struct {
 }
 
 type ReadChunkHandler struct {
-	Repo                chunk.ChunkRepository
-	VolumeManager       *volume.VolumeManager
-	VolumeHealthChecker portvolume.VolumeHealthChecker
+	Repo                    chunk.ChunkRepository
+	VolumeManager           *volume.VolumeManager
+	VolumeHealthChecker     portvolume.VolumeHealthChecker
+	VolumeTelemetryProvider portvolume.VolumeTelemetryProvider
 }
 
 func NewReadChunkHandler(
 	repo chunk.ChunkRepository,
 	volumeManager *volume.VolumeManager,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
+	volumeTelemetryProvider portvolume.VolumeTelemetryProvider,
 ) *ReadChunkHandler {
 	return &ReadChunkHandler{
-		Repo:                repo,
-		VolumeManager:       volumeManager,
-		VolumeHealthChecker: volumeHealthChecker,
+		Repo:                    repo,
+		VolumeManager:           volumeManager,
+		VolumeHealthChecker:     volumeHealthChecker,
+		VolumeTelemetryProvider: volumeTelemetryProvider,
 	}
 }
 
@@ -75,6 +79,9 @@ func (h *ReadChunkHandler) HandleReadChunk(ctx context.Context, input *ReadChunk
 	}
 
 	volumeID := availableChunk.ChunkID().VolumeID()
+
+	// Add volume telemetry to context
+	ctx = adaptervolumetelemetry.WithVolumeTelemetry(ctx, volumeID, h.VolumeTelemetryProvider)
 
 	vol, err := h.VolumeManager.GetVolumeByID(volumeID)
 	if err != nil {

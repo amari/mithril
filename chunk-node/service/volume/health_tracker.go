@@ -16,10 +16,10 @@ import (
 // It subscribes to stats from VolumeStatsManager and tracks operation errors
 // to manage health state transitions.
 type VolumeHealthTracker struct {
-	statsManager      *VolumeStatsManager
-	attributeRegistry portvolume.VolumeAttributeRegistry
-	log               *zerolog.Logger
-	nowFunc           func() time.Time
+	statsManager *VolumeStatsManager
+	//telemetryProvider portvolume.VolumeTelemetryProvider
+	log     *zerolog.Logger
+	nowFunc func() time.Time
 
 	// OTel metrics
 	healthStateGauge       metric.Int64Gauge
@@ -82,7 +82,7 @@ type HealthConfig struct {
 
 func NewVolumeHealthTracker(
 	statsManager *VolumeStatsManager,
-	attributeRegistry portvolume.VolumeAttributeRegistry,
+	//telemetryProvider portvolume.VolumeTelemetryProvider,
 	meter metric.Meter,
 	log *zerolog.Logger,
 	nowFunc func() time.Time,
@@ -131,8 +131,8 @@ func NewVolumeHealthTracker(
 	}
 
 	return &VolumeHealthTracker{
-		statsManager:           statsManager,
-		attributeRegistry:      attributeRegistry,
+		statsManager: statsManager,
+		//telemetryProvider:      telemetryProvider,
 		log:                    log,
 		nowFunc:                nowFunc,
 		healthStateGauge:       healthStateGauge,
@@ -152,10 +152,8 @@ func (t *VolumeHealthTracker) buildAttributes(volumeID domain.VolumeID, extraAtt
 		attribute.Int("volume.id", int(volumeID)),
 	}
 
-	// Add registered static attributes
-	if registeredAttrs := t.attributeRegistry.GetAttributes(volumeID); registeredAttrs != nil {
-		attrs = append(attrs, registeredAttrs...)
-	}
+	// Add attributes from telemetry provider (e.g., volume type)
+	//attrs = append(attrs, t.telemetryProvider.GetVolumeAttributes(volumeID)...)
 
 	// Add any extra attributes
 	if len(extraAttrs) > 0 {

@@ -20,50 +20,17 @@ import (
 // Verify VolumeHealthTracker implements VolumeHealthChecker
 var _ portvolume.VolumeHealthChecker = (*VolumeHealthTracker)(nil)
 
-// mockAttributeRegistry implements portvolume.VolumeAttributeRegistry for testing
-type mockAttributeRegistry struct {
-	mu    sync.RWMutex
+// mockTelemetryProvider implements portvolume.VolumeTelemetryProvider for testing
+type mockTelemetryProvider struct {
 	attrs map[domain.VolumeID][]attribute.KeyValue
 }
 
-func newMockAttributeRegistry() *mockAttributeRegistry {
-	return &mockAttributeRegistry{
-		attrs: make(map[domain.VolumeID][]attribute.KeyValue),
-	}
+func (m *mockTelemetryProvider) GetVolumeAttributes(volumeID domain.VolumeID) []attribute.KeyValue {
+	return m.attrs[volumeID]
 }
 
-func (r *mockAttributeRegistry) SetAttributes(volumeID domain.VolumeID, attrs []attribute.KeyValue) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if len(attrs) == 0 {
-		delete(r.attrs, volumeID)
-	} else {
-		r.attrs[volumeID] = attrs
-	}
-}
-
-func (r *mockAttributeRegistry) AddAttributes(volumeID domain.VolumeID, attrs ...attribute.KeyValue) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.attrs[volumeID] = append(r.attrs[volumeID], attrs...)
-}
-
-func (r *mockAttributeRegistry) RemoveAttributes(volumeID domain.VolumeID, keys ...string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	// Simplified: just ignore removals for test purposes
-}
-
-func (r *mockAttributeRegistry) RemoveAllAttributes(volumeID domain.VolumeID) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.attrs, volumeID)
-}
-
-func (r *mockAttributeRegistry) GetAttributes(volumeID domain.VolumeID) []attribute.KeyValue {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.attrs[volumeID]
+func (m *mockTelemetryProvider) GetVolumeLoggerFields(volumeID domain.VolumeID) []any {
+	return nil
 }
 
 // testHealthTracker creates a VolumeHealthTracker for testing with a controllable time function
@@ -73,7 +40,6 @@ func testHealthTracker(t *testing.T) (*VolumeHealthTracker, func(time.Time)) {
 	logger := zerolog.Nop()
 	meter := noop.NewMeterProvider().Meter("test")
 	statsManager := NewVolumeStatsManager(&logger)
-	attrRegistry := newMockAttributeRegistry()
 
 	currentTime := time.Now()
 	var timeMu sync.Mutex
@@ -84,7 +50,7 @@ func testHealthTracker(t *testing.T) (*VolumeHealthTracker, func(time.Time)) {
 		return currentTime
 	}
 
-	tracker, err := NewVolumeHealthTracker(statsManager, attrRegistry, meter, &logger, nowFunc)
+	tracker, err := NewVolumeHealthTracker(statsManager, meter, &logger, nowFunc)
 	if err != nil {
 		t.Fatalf("NewVolumeHealthTracker() error = %v", err)
 	}
@@ -102,9 +68,8 @@ func TestNewVolumeHealthTracker(t *testing.T) {
 	logger := zerolog.Nop()
 	meter := noop.NewMeterProvider().Meter("test")
 	statsManager := NewVolumeStatsManager(&logger)
-	attrRegistry := newMockAttributeRegistry()
 
-	tracker, err := NewVolumeHealthTracker(statsManager, attrRegistry, meter, &logger, time.Now)
+	tracker, err := NewVolumeHealthTracker(statsManager, meter, &logger, time.Now)
 
 	if err != nil {
 		t.Fatalf("NewVolumeHealthTracker() error = %v", err)
@@ -126,12 +91,11 @@ func TestNewVolumeHealthTracker(t *testing.T) {
 func TestNewVolumeHealthTracker_MeterError(t *testing.T) {
 	logger := zerolog.Nop()
 	statsManager := NewVolumeStatsManager(&logger)
-	attrRegistry := newMockAttributeRegistry()
 
 	// Create a valid meter - we can't easily force meter errors with noop
 	meter := noop.NewMeterProvider().Meter("test")
 
-	tracker, err := NewVolumeHealthTracker(statsManager, attrRegistry, meter, &logger, time.Now)
+	tracker, err := NewVolumeHealthTracker(statsManager, meter, &logger, time.Now)
 
 	// With noop meter, it should succeed
 	if err != nil {
@@ -1612,14 +1576,8 @@ func TestVolumeHealthTracker_MetricsRecording_NoPanic(t *testing.T) {
 	logger := zerolog.Nop()
 	meter := noop.NewMeterProvider().Meter("test")
 	statsManager := NewVolumeStatsManager(&logger)
-	attrRegistry := newMockAttributeRegistry()
 
-	// Add some attributes to verify they're used
-	attrRegistry.SetAttributes(domain.VolumeID(1), []attribute.KeyValue{
-		attribute.String("path", "/data/vol1"),
-	})
-
-	tracker, err := NewVolumeHealthTracker(statsManager, attrRegistry, meter, &logger, time.Now)
+	tracker, err := NewVolumeHealthTracker(statsManager, meter, &logger, time.Now)
 	if err != nil {
 		t.Fatalf("NewVolumeHealthTracker() error = %v", err)
 	}
@@ -1655,66 +1613,6 @@ func TestVolumeHealthTracker_MetricsRecording_NoPanic(t *testing.T) {
 	tracker.updateHealthFromStats(volumeID, stats)
 
 	// Should complete without panicking
-}
-
-// Test buildAttributes
-
-func TestVolumeHealthTracker_buildAttributes(t *testing.T) {
-	logger := zerolog.Nop()
-	meter := noop.NewMeterProvider().Meter("test")
-	statsManager := NewVolumeStatsManager(&logger)
-	attrRegistry := newMockAttributeRegistry()
-
-	// Add registered attributes
-	attrRegistry.SetAttributes(domain.VolumeID(1), []attribute.KeyValue{
-		attribute.String("path", "/data/vol1"),
-		attribute.String("type", "ssd"),
-	})
-
-	tracker, err := NewVolumeHealthTracker(statsManager, attrRegistry, meter, &logger, time.Now)
-	if err != nil {
-		t.Fatalf("NewVolumeHealthTracker() error = %v", err)
-	}
-
-	attrs := tracker.buildAttributes(domain.VolumeID(1),
-		attribute.String("extra", "value"),
-	)
-
-	// Should contain volume.id, registered attrs, and extra attrs
-	if len(attrs) < 3 {
-		t.Errorf("buildAttributes() returned %d attrs, want at least 3", len(attrs))
-	}
-
-	// Verify volume.id is present
-	hasVolumeID := false
-	for _, attr := range attrs {
-		if attr.Key == "volume.id" {
-			hasVolumeID = true
-			break
-		}
-	}
-	if !hasVolumeID {
-		t.Error("buildAttributes() should include volume.id")
-	}
-}
-
-func TestVolumeHealthTracker_buildAttributes_NoRegisteredAttrs(t *testing.T) {
-	logger := zerolog.Nop()
-	meter := noop.NewMeterProvider().Meter("test")
-	statsManager := NewVolumeStatsManager(&logger)
-	attrRegistry := newMockAttributeRegistry()
-
-	tracker, err := NewVolumeHealthTracker(statsManager, attrRegistry, meter, &logger, time.Now)
-	if err != nil {
-		t.Fatalf("NewVolumeHealthTracker() error = %v", err)
-	}
-
-	attrs := tracker.buildAttributes(domain.VolumeID(999))
-
-	// Should only have volume.id
-	if len(attrs) != 1 {
-		t.Errorf("buildAttributes() returned %d attrs, want 1", len(attrs))
-	}
 }
 
 // Test Sample.Valid() usage in updateHealthFromStats
@@ -1993,9 +1891,8 @@ func TestVolumeHealthTracker_WithNoopMeter(t *testing.T) {
 	logger := zerolog.Nop()
 	meter := noop.NewMeterProvider().Meter("test")
 	statsManager := NewVolumeStatsManager(&logger)
-	attrRegistry := newMockAttributeRegistry()
 
-	tracker, err := NewVolumeHealthTracker(statsManager, attrRegistry, meter, &logger, time.Now)
+	tracker, err := NewVolumeHealthTracker(statsManager, meter, &logger, time.Now)
 	if err != nil {
 		t.Fatalf("NewVolumeHealthTracker() error = %v", err)
 	}
@@ -2043,20 +1940,19 @@ func BenchmarkVolumeHealthTracker_RecordError(b *testing.B) {
 	logger := zerolog.Nop()
 	meter := noop.NewMeterProvider().Meter("test")
 	statsManager := NewVolumeStatsManager(&logger)
-	attrRegistry := newMockAttributeRegistry()
 
-	tracker, _ := NewVolumeHealthTracker(statsManager, attrRegistry, meter, &logger, time.Now)
+	tracker, _ := NewVolumeHealthTracker(statsManager, meter, &logger, time.Now)
 	defer tracker.ClearVolumes()
 
 	volumeID := domain.VolumeID(1)
 	tracker.AddVolume(volumeID, HealthConfig{DegradedThreshold: 1000000})
 
 	ctx := context.Background()
-	err := syscall.ENOSPC
+	testErr := syscall.ENOSPC
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tracker.RecordError(ctx, volumeID, err)
+		tracker.RecordError(ctx, volumeID, testErr)
 	}
 }
 
@@ -2064,9 +1960,8 @@ func BenchmarkVolumeHealthTracker_RecordSuccess(b *testing.B) {
 	logger := zerolog.Nop()
 	meter := noop.NewMeterProvider().Meter("test")
 	statsManager := NewVolumeStatsManager(&logger)
-	attrRegistry := newMockAttributeRegistry()
 
-	tracker, _ := NewVolumeHealthTracker(statsManager, attrRegistry, meter, &logger, time.Now)
+	tracker, _ := NewVolumeHealthTracker(statsManager, meter, &logger, time.Now)
 	defer tracker.ClearVolumes()
 
 	volumeID := domain.VolumeID(1)
@@ -2084,9 +1979,8 @@ func BenchmarkVolumeHealthTracker_CheckVolumeHealth(b *testing.B) {
 	logger := zerolog.Nop()
 	meter := noop.NewMeterProvider().Meter("test")
 	statsManager := NewVolumeStatsManager(&logger)
-	attrRegistry := newMockAttributeRegistry()
 
-	tracker, _ := NewVolumeHealthTracker(statsManager, attrRegistry, meter, &logger, time.Now)
+	tracker, _ := NewVolumeHealthTracker(statsManager, meter, &logger, time.Now)
 	defer tracker.ClearVolumes()
 
 	volumeID := domain.VolumeID(1)
@@ -2102,9 +1996,8 @@ func BenchmarkVolumeHealthTracker_updateHealthFromStats(b *testing.B) {
 	logger := zerolog.Nop()
 	meter := noop.NewMeterProvider().Meter("test")
 	statsManager := NewVolumeStatsManager(&logger)
-	attrRegistry := newMockAttributeRegistry()
 
-	tracker, _ := NewVolumeHealthTracker(statsManager, attrRegistry, meter, &logger, time.Now)
+	tracker, _ := NewVolumeHealthTracker(statsManager, meter, &logger, time.Now)
 	defer tracker.ClearVolumes()
 
 	volumeID := domain.VolumeID(1)
