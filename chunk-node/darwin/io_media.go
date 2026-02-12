@@ -51,17 +51,27 @@ type IOMedia struct {
 	service IOService
 }
 
-// IOMediaFromPath creates an IOMedia from a filesystem path.
-func IOMediaFromPath(path string) (*IOMedia, error) {
+// BSDNameFromPath returns the BSD device name for the filesystem containing the given path.
+func BSDNameFromPath(path string) (string, error) {
 	buf, err := unix.Statfs(path)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	// TODO: validate buf.Mntfromname is a valid UTF-8 string
 
 	rawBSDName := strings.Trim(string(buf.Mntfromname[:]), "\x00")
 	bsdName := strings.TrimPrefix(filepath.Base(rawBSDName), "r")
+
+	return bsdName, nil
+}
+
+// IOMediaFromPath creates an IOMedia from a filesystem path.
+func IOMediaFromPath(path string) (*IOMedia, error) {
+	bsdName, err := BSDNameFromPath(path)
+	if err != nil {
+		return nil, err
+	}
 
 	return IOMediaFromBSDName(bsdName)
 }
