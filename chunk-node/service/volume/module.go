@@ -64,6 +64,9 @@ func Module(directoryVolumePaths []string) fx.Option {
 			return svc
 		}),
 		fx.Provide(
+			func(m *VolumeManager) portvolume.VolumeProvider {
+				return m
+			},
 			func(svc *VolumeService) portvolume.VolumeCharacteristicsProvider {
 				return svc
 			},

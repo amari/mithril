@@ -79,3 +79,16 @@ func (m *VolumeManager) ClearVolumes() {
 	m.volumeSlice = nil
 	m.volumeMap = make(map[domain.VolumeID]volume.Volume)
 }
+
+// GetVolume implements the VolumeProvider interface.
+func (m *VolumeManager) GetVolume(id domain.VolumeID) volume.Volume {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	v, ok := m.volumeMap[id]
+	if !ok {
+		return nil
+	}
+
+	return v
+}

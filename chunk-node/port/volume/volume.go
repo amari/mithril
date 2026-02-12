@@ -12,3 +12,10 @@ type Volume interface {
 
 	Chunks() port.ChunkStore
 }
+
+// VolumeProvider provides access to volumes by their ID.
+type VolumeProvider interface {
+	// GetVolume retrieves a volume by its ID.
+	// Returns the Volume if found, or nil if the volume does not exist.
+	GetVolume(id domain.VolumeID) Volume
+}
