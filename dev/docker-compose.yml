@@ -63,7 +63,7 @@ services:
     image: "quay.io/coreos/etcd:v3.6.7"
     entrypoint: /usr/local/bin/etcd
     ports:
-      - 2379
+      - "2379:2379"
     environment:
       ETCD_NAME: "etcd-node-1"
       ETCD_LISTEN_CLIENT_URLS: "http://0.0.0.0:2379"
