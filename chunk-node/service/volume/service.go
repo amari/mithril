@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	volumedirectorystatscollector "github.com/amari/mithril/chunk-node/adapter/volume/directory/statscollector"
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port"
 	"github.com/amari/mithril/chunk-node/port/volume"
@@ -21,10 +22,7 @@ type VolumeService struct {
 	manager          *VolumeManager
 	picker           volume.VolumePicker
 
-	// Health and stats management
-	healthTracker *VolumeHealthTracker
-	statsManager  *VolumeStatsManager
-	log           *zerolog.Logger
+	log *zerolog.Logger
 
 	characteristics map[domain.VolumeID]*domain.VolumeCharacteristics
 	attributes      map[domain.VolumeID][]attribute.KeyValue
@@ -32,6 +30,7 @@ type VolumeService struct {
 	labelIndex      map[string][]domain.VolumeID
 	labelBits       map[string]portvolume.VolumeBitset
 	loggerFields    map[domain.VolumeID][]any
+	stats           map[domain.VolumeID]portvolume.VolumeStatsCollector
 }
 
 var (
@@ -49,8 +48,6 @@ func NewVolumeService(
 	directoryExpert volume.DirectoryVolumeExpert,
 	manager *VolumeManager,
 	picker volume.VolumePicker,
-	healthTracker *VolumeHealthTracker,
-	statsManager *VolumeStatsManager,
 	log *zerolog.Logger,
 ) *VolumeService {
 	return &VolumeService{
@@ -59,8 +56,6 @@ func NewVolumeService(
 		directoryExpert:  directoryExpert,
 		manager:          manager,
 		picker:           picker,
-		healthTracker:    healthTracker,
-		statsManager:     statsManager,
 		log:              log,
 
 		characteristics: make(map[domain.VolumeID]*domain.VolumeCharacteristics),
@@ -69,6 +64,7 @@ func NewVolumeService(
 		labelIndex:      make(map[string][]domain.VolumeID),
 		labelBits:       make(map[string]portvolume.VolumeBitset),
 		loggerFields:    make(map[domain.VolumeID][]any),
+		stats:           make(map[domain.VolumeID]portvolume.VolumeStatsCollector),
 	}
 }
 
@@ -129,22 +125,20 @@ func (s *VolumeService) AddDirectoryVolume(ctx context.Context, path string, for
 		// TODO: Update bitset index
 	}
 
-	// Start stats monitoring - must succeed
-	pollInterval := 10 * time.Second // TODO: make configurable
-	if err := s.statsManager.AddDirectoryVolume(volumeID, path, pollInterval); err != nil {
-		// Failed to setup stats, close volume and fail
+	// Start stats collecting
+	if statsCollector, err := volumedirectorystatscollector.NewDirectoryVolumeStatsCollector(volumedirectorystatscollector.DirectoryVolumeStatsCollectorOptions{
+		VolumeID:     volumeID,
+		Path:         path,
+		PollInterval: 10 * time.Second, // TODO: make configurable
+	}); err != nil {
 		vol.Close()
 		return err
+	} else {
+		s.stats[volumeID] = statsCollector
 	}
 
 	// Start health tracking - must succeed
-	healthConfig := defaultHealthConfig() // TODO: make configurable per volume
-	if err := s.healthTracker.AddVolume(volumeID, healthConfig); err != nil {
-		// Failed to setup health, clean up stats and volume, then fail
-		s.statsManager.RemoveVolume(volumeID)
-		vol.Close()
-		return err
-	}
+	// TODO
 
 	// All setup successful, add to manager and picker
 	s.manager.AddVolume(vol)
@@ -164,16 +158,20 @@ func (s *VolumeService) CloseAllVolumes(ctx context.Context) error {
 	s.picker.SetVolumeIDs(nil)
 
 	// Stop health tracking for all volumes
-	s.healthTracker.ClearVolumes()
+	// TODO
 
 	vols := s.manager.Volumes()
 
 	for _, vol := range vols {
 		id := vol.ID()
 
-		// Stop stats monitoring
-		if err := s.statsManager.RemoveVolume(id); err != nil {
-			errs = append(errs, err)
+		// Stop collecting stats
+		if collector, ok := s.stats[id]; ok {
+			if err := collector.Close(); err != nil {
+				errs = append(errs, err)
+			}
+
+			delete(s.stats, id)
 		}
 
 		err := vol.Close()
@@ -194,13 +192,13 @@ func (s *VolumeService) CloseAllVolumes(ctx context.Context) error {
 // RecordOperationError is called by handlers after volume operations fail.
 // Updates health state based on error classification.
 func (s *VolumeService) RecordOperationError(ctx context.Context, volumeID domain.VolumeID, err error) {
-	s.healthTracker.RecordError(ctx, volumeID, err)
+	//s.healthTracker.RecordError(ctx, volumeID, err)
 }
 
 // RecordOperationSuccess is called by handlers after successful volume operations.
 // May contribute to recovery from degraded state.
 func (s *VolumeService) RecordOperationSuccess(ctx context.Context, volumeID domain.VolumeID) {
-	s.healthTracker.RecordSuccess(ctx, volumeID)
+	//s.healthTracker.RecordSuccess(ctx, volumeID)
 }
 
 // GetVolumeCharacteristics implements VolumeCharacteristicsProvider.
@@ -253,6 +251,27 @@ func (s *VolumeService) GetVolumeBitsetWithLabel(label string) portvolume.Volume
 // GetAllBitsetLabelIndexes implements VolumeBitsetLabelIndexesProvider.
 func (s *VolumeService) GetAllBitsetLabelIndexes() map[string]portvolume.VolumeBitset {
 	return s.labelBits
+}
+
+// GetVolumeStats implements VolumeStatsProvider.
+func (s *VolumeService) GetVolumeStats(id domain.VolumeID) *domain.VolumeStats {
+	statsCollector, ok := s.stats[id]
+
+	if !ok {
+		return statsCollector.CollectVolumeStats()
+	}
+
+	return nil
+}
+
+func (s *VolumeService) GetVolumeHealth(id domain.VolumeID) *domain.VolumeHealth {
+	return &domain.VolumeHealth{
+		State: domain.VolumeStateOK,
+	}
+}
+
+func (s *VolumeService) CheckVolumeHealth(id domain.VolumeID) *domain.VolumeHealth {
+	return s.GetVolumeHealth(id)
 }
 
 func buildVolumeAttributes(characteristics *domain.VolumeCharacteristics) []attribute.KeyValue {

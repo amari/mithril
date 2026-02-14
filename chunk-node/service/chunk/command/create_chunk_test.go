@@ -131,16 +131,16 @@ func (m *mockVolumeHealthChecker) CheckVolumeHealth(v domain.VolumeID) *domain.V
 }
 
 type mockVolumeStatsProvider struct {
-	volumeStatsFunc func(ctx context.Context, volume domain.VolumeID) (domain.VolumeStats, error)
+	volumeStatsFunc func(volume domain.VolumeID) *domain.VolumeStats
 }
 
 var _ portvolume.VolumeStatsProvider = (*mockVolumeStatsProvider)(nil)
 
-func (m *mockVolumeStatsProvider) VolumeStats(ctx context.Context, volume domain.VolumeID) (domain.VolumeStats, error) {
+func (m *mockVolumeStatsProvider) GetVolumeStats(volume domain.VolumeID) *domain.VolumeStats {
 	if m.volumeStatsFunc != nil {
-		return m.volumeStatsFunc(ctx, volume)
+		return m.volumeStatsFunc(volume)
 	}
-	return domain.VolumeStats{}, nil
+	return nil
 }
 
 type mockVolumeTelemetryProvider struct {

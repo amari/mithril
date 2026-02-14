@@ -1,8 +1,6 @@
 package picker
 
 import (
-	"context"
-
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port/volume"
 )
@@ -19,8 +17,8 @@ func (f *AvailableSpacePickFilter) FilterVolumeIDPick(v domain.VolumeID) bool {
 		return true
 	}
 
-	stats, err := f.VolumeStatsProvider.VolumeStats(context.Background(), v)
-	if err != nil {
+	stats := f.VolumeStatsProvider.GetVolumeStats(v)
+	if stats == nil {
 		return false
 	}
 

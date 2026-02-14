@@ -5,13 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/amari/mithril/chunk-node/port"
 	"github.com/amari/mithril/chunk-node/port/volume"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/fx"
 )
 
@@ -34,33 +32,8 @@ func Module(directoryVolumePaths []string) fx.Option {
 			NewVolumeAdmissionController,
 		),
 		fx.Provide(NewVolumeManager),
-		fx.Provide(func(log *zerolog.Logger, lc fx.Lifecycle) (*VolumeStatsManager, portvolume.VolumeStatsProvider) {
-			statsManager := NewVolumeStatsManager(log)
-
-			lc.Append(fx.StopHook(statsManager.ClearVolumes))
-
-			return statsManager, statsManager
-		}),
-		fx.Provide(
-			func(statsManager *VolumeStatsManager,
-				meter metric.Meter,
-				log *zerolog.Logger,
-				lc fx.Lifecycle,
-			) (*VolumeHealthTracker, error) {
-				healthTracker, err := NewVolumeHealthTracker(statsManager, meter, log, time.Now)
-				if err != nil {
-					return nil, err
-				}
-				lc.Append(fx.StopHook(healthTracker.ClearVolumes))
-
-				return healthTracker, nil
-			},
-			func(healthTracker *VolumeHealthTracker) portvolume.VolumeHealthChecker {
-				return healthTracker
-			},
-		),
-		fx.Provide(func(nodeIdentityRepo port.NodeIdentityRepository, idAlloc volume.VolumeIDAllocator, directoryExpert volume.DirectoryVolumeExpert, volumeManager *VolumeManager, volumePicker volume.VolumePicker, healthTracker *VolumeHealthTracker, statsManager *VolumeStatsManager, log *zerolog.Logger, lc fx.Lifecycle) *VolumeService {
-			svc := NewVolumeService(nodeIdentityRepo, idAlloc, directoryExpert, volumeManager, volumePicker, healthTracker, statsManager, log)
+		fx.Provide(func(nodeIdentityRepo port.NodeIdentityRepository, idAlloc volume.VolumeIDAllocator, directoryExpert volume.DirectoryVolumeExpert, volumeManager *VolumeManager, volumePicker volume.VolumePicker, log *zerolog.Logger, lc fx.Lifecycle) *VolumeService {
+			svc := NewVolumeService(nodeIdentityRepo, idAlloc, directoryExpert, volumeManager, volumePicker, log)
 
 			lc.Append(fx.StopHook(svc.CloseAllVolumes))
 
@@ -73,8 +46,14 @@ func Module(directoryVolumePaths []string) fx.Option {
 			func(svc *VolumeService) portvolume.VolumeCharacteristicsProvider {
 				return svc
 			},
-			func(ht *VolumeHealthTracker) portvolume.VolumeHealthProvider {
-				return ht
+			func(svc *VolumeService) portvolume.VolumeHealthChecker {
+				return svc
+			},
+			func(svc *VolumeService) portvolume.VolumeHealthProvider {
+				return svc
+			},
+			func(svc *VolumeService) portvolume.VolumeStatsProvider {
+				return svc
 			},
 			func(svc *VolumeService) portvolume.VolumeTelemetryProvider {
 				return svc
