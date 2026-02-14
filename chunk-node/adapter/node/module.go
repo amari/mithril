@@ -3,8 +3,8 @@ package node
 import (
 	"path/filepath"
 
+	adapternodelabelcollector "github.com/amari/mithril/chunk-node/adapter/node/labelcollector"
 	"github.com/amari/mithril/chunk-node/port"
-	"github.com/rs/zerolog"
 	"go.uber.org/fx"
 )
 
@@ -31,19 +31,6 @@ func Module(cfg *Config, dataDir string) fx.Option {
 		fx.Provide(NewMemberWatchManager),
 		fx.Supply(fx.Annotate(NewFileBackedNodeSeedRepository(filepath.Join(dataDir, "node_seed.json")), fx.As(new(port.NodeSeedRepository)))),
 		fx.Supply(fx.Annotate(NewFileBackedNodeIdentityRepository(filepath.Join(dataDir, "node_identity.json")), fx.As(new(port.NodeIdentityRepository)))),
-		fx.Provide(func(log *zerolog.Logger) port.NodeLabeler {
-			labelers := []port.NodeLabeler{
-				NewStaticNodeLabeler(cfg.Labels),
-				NewRuntimeNodeLabeler(),
-			}
-
-			if k8sLabeler, err := KubernetesInClusterNodeLabeler(); err != nil {
-				log.Warn().Err(err).Msg("Failed to create Kubernetes node labeler, skipping")
-			} else {
-				labelers = append(labelers, k8sLabeler)
-			}
-
-			return NewChainNodeLabeler(labelers...)
-		}),
+		adapternodelabelcollector.Module(cfg.Labels),
 	)
 }

@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"sync"
 
+	adapternodelabeler "github.com/amari/mithril/chunk-node/adapter/node/labelcollector"
 	"github.com/amari/mithril/chunk-node/port"
+	portnode "github.com/amari/mithril/chunk-node/port/node"
 	"github.com/rs/zerolog"
 )
 
@@ -13,13 +16,26 @@ type NodeLabelService struct {
 	nodeLabeler        port.NodeLabeler
 	nodeLabelPublisher port.NodeLabelPublisher
 	log                *zerolog.Logger
+
+	runtimeLabelCollector        portnode.NodeLabelCollector
+	kubernetesPodLabelCollector  portnode.NodeLabelCollector
+	kubernetesNodeLabelCollector portnode.NodeLabelCollector
 }
 
-func NewNodeLabelService(nodeLabeler port.NodeLabeler, nodeLabelPublisher port.NodeLabelPublisher, log *zerolog.Logger) *NodeLabelService {
+func NewNodeLabelService(
+	nodeLabelPublisher port.NodeLabelPublisher,
+	log *zerolog.Logger,
+	runtimeLabelCollector *adapternodelabeler.Runtime,
+	kubernetesPodLabelCollector *adapternodelabeler.KubernetesPod,
+	kubernetesNodeLabelCollector *adapternodelabeler.KubernetesNode,
+) *NodeLabelService {
 	return &NodeLabelService{
-		nodeLabeler:        nodeLabeler,
 		nodeLabelPublisher: nodeLabelPublisher,
 		log:                log,
+
+		runtimeLabelCollector:        newLabelCollectorCache(runtimeLabelCollector),
+		kubernetesPodLabelCollector:  newLabelCollectorCache(kubernetesPodLabelCollector),
+		kubernetesNodeLabelCollector: newLabelCollectorCache(kubernetesNodeLabelCollector),
 	}
 }
 
@@ -27,14 +43,36 @@ func NewNodeLabelService(nodeLabeler port.NodeLabeler, nodeLabelPublisher port.N
 func (s *NodeLabelService) CollectAndPublish(ctx context.Context) error {
 	labels := make(map[string]string)
 
-	// Collect from labeler
-	labelerLabels, err := s.nodeLabeler.Labels(ctx)
+	// Collect from runtime
+	runtimeLabels, err := s.runtimeLabelCollector.CollectNodeLabels(ctx)
 	if err != nil {
-		s.log.Error().Err(err).Msg("failed to get labels from labeler")
+		s.log.Error().Err(err).Msg("failed to collect runtime labels")
 
-		return fmt.Errorf("failed to get labels from labeler: %w", err)
+		return fmt.Errorf("failed to collect runtime labels: %w", err)
 	}
-	maps.Copy(labels, labelerLabels)
+	maps.Copy(labels, runtimeLabels)
+
+	if s.kubernetesNodeLabelCollector != nil {
+		// Collect from Kubernetes node
+		kubeNodeLabels, err := s.kubernetesNodeLabelCollector.CollectNodeLabels(ctx)
+		if err != nil {
+			s.log.Error().Err(err).Msg("failed to collect Kubernetes node labels")
+
+			return fmt.Errorf("failed to collect Kubernetes node labels: %w", err)
+		}
+		maps.Copy(labels, kubeNodeLabels)
+	}
+
+	if s.kubernetesPodLabelCollector != nil {
+		// Collect from Kubernetes pod
+		kubePodLabels, err := s.kubernetesPodLabelCollector.CollectNodeLabels(ctx)
+		if err != nil {
+			s.log.Error().Err(err).Msg("failed to collect Kubernetes pod labels")
+
+			return fmt.Errorf("failed to collect Kubernetes pod labels: %w", err)
+		}
+		maps.Copy(labels, kubePodLabels)
+	}
 
 	// Publish to etcd
 	if err := s.nodeLabelPublisher.PublishLabels(ctx, labels); err != nil {
@@ -42,4 +80,36 @@ func (s *NodeLabelService) CollectAndPublish(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+type labelCollectorCache struct {
+	collector portnode.NodeLabelCollector
+
+	once   sync.Once
+	labels map[string]string
+	err    error
+}
+
+func newLabelCollectorCache(collector portnode.NodeLabelCollector) portnode.NodeLabelCollector {
+	if collector == nil {
+		return nil
+	}
+
+	return &labelCollectorCache{
+		collector: collector,
+	}
+}
+
+var _ portnode.NodeLabelCollector = (*labelCollectorCache)(nil)
+
+func (c *labelCollectorCache) CollectNodeLabels(ctx context.Context) (map[string]string, error) {
+	c.once.Do(func() {
+		c.labels, c.err = c.collector.CollectNodeLabels(ctx)
+	})
+
+	return c.labels, c.err
+}
+
+func (c *labelCollectorCache) Close() error {
+	return c.collector.Close()
 }
