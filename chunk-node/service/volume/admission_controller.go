@@ -12,7 +12,7 @@ type VolumeAdmissionController struct {
 
 var _ portvolume.VolumeAdmissionController = (*VolumeAdmissionController)(nil)
 
-func NewVolumeAdmissionController(healthProvider portvolume.VolumeHealthProvider) *VolumeAdmissionController {
+func NewVolumeAdmissionController(healthProvider portvolume.VolumeHealthProvider) portvolume.VolumeAdmissionController {
 	return &VolumeAdmissionController{
 		healthProvider: healthProvider,
 	}

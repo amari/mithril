@@ -46,7 +46,7 @@ func TestNewVolumeAdmissionController(t *testing.T) {
 		t.Fatal("NewVolumeAdmissionController() returned nil")
 	}
 
-	if controller.healthProvider != healthProvider {
+	if controller.(*VolumeAdmissionController).healthProvider != healthProvider {
 		t.Error("healthProvider not set correctly")
 	}
 }
@@ -58,7 +58,7 @@ func TestNewVolumeAdmissionController_NilProvider(t *testing.T) {
 		t.Fatal("NewVolumeAdmissionController() returned nil")
 	}
 
-	if controller.healthProvider != nil {
+	if controller.(*VolumeAdmissionController).healthProvider != nil {
 		t.Error("healthProvider should be nil")
 	}
 }
