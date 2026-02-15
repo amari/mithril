@@ -33,9 +33,20 @@ func NewNodeLabelService(
 		nodeLabelPublisher: nodeLabelPublisher,
 		log:                log,
 
-		runtimeLabelCollector:        newLabelCollectorCache(runtimeLabelCollector),
-		kubernetesPodLabelCollector:  newLabelCollectorCache(kubernetesPodLabelCollector),
-		kubernetesNodeLabelCollector: newLabelCollectorCache(kubernetesNodeLabelCollector),
+		runtimeLabelCollector: runtimeLabelCollector,
+		kubernetesPodLabelCollector: adapternodelabeler.First(
+			adapternodelabeler.Backoff(
+				kubernetesPodLabelCollector,
+				adapternodelabeler.BackoffOptions{},
+			),
+		),
+		kubernetesNodeLabelCollector: adapternodelabeler.Debounce(
+			adapternodelabeler.Backoff(
+				kubernetesNodeLabelCollector,
+				adapternodelabeler.BackoffOptions{},
+			),
+			adapternodelabeler.DebounceOptions{},
+		),
 	}
 }
 
@@ -88,28 +99,4 @@ type labelCollectorCache struct {
 	once   sync.Once
 	labels map[string]string
 	err    error
-}
-
-func newLabelCollectorCache(collector portnode.NodeLabelCollector) portnode.NodeLabelCollector {
-	if collector == nil {
-		return nil
-	}
-
-	return &labelCollectorCache{
-		collector: collector,
-	}
-}
-
-var _ portnode.NodeLabelCollector = (*labelCollectorCache)(nil)
-
-func (c *labelCollectorCache) CollectNodeLabels(ctx context.Context) (map[string]string, error) {
-	c.once.Do(func() {
-		c.labels, c.err = c.collector.CollectNodeLabels(ctx)
-	})
-
-	return c.labels, c.err
-}
-
-func (c *labelCollectorCache) Close() error {
-	return c.collector.Close()
 }
