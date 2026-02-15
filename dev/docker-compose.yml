@@ -38,6 +38,23 @@ services:
         reservations:
           cpus: "0.5"
           memory: 256M
+  node_exporter:
+    image: quay.io/prometheus/node-exporter:latest
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - "/:/host:ro,rslave"
+    #network_mode: host
+    pid: host
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
   grafana:
     image: "grafana/grafana:12.3"
     environment:
@@ -120,10 +137,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "4.0"
+          memory: 1G
         reservations:
-          cpus: "0.25"
+          cpus: "4.0"
           memory: 256M
 volumes:
   chunk-node-data:
