@@ -57,6 +57,19 @@ func buildRootCommand() *cli.Command {
 				DefaultText: "/var/lib/mithril",
 				OnlyOnce:    true,
 			},
+			&cli.StringFlag{
+				Name:        "log-format",
+				Usage:       "Log output format (json or text)",
+				DefaultText: "json",
+				OnlyOnce:    true,
+			},
+			&cli.StringFlag{
+				Name:        "log-level",
+				Usage:       "Log level (debug, info, warn, error, fatal, panic)",
+				DefaultText: "info",
+				Value:       "info",
+				OnlyOnce:    true,
+			},
 		},
 	}
 
@@ -85,6 +98,10 @@ func buildServerCommand() *cli.Command {
 			}
 
 			if err := LoadConfigFromEnv(k, "MITHRIL_"); err != nil {
+				return err
+			}
+
+			if err := LoadConfigFromCLI(k, cmd.Root()); err != nil {
 				return err
 			}
 

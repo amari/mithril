@@ -6,17 +6,14 @@ import (
 	"log/slog"
 	"os"
 
+	"golang.org/x/term"
+
 	fxeventzerolog "github.com/amari/fxevent-zerolog"
 	"github.com/rs/zerolog"
 	slogzerolog "github.com/samber/slog-zerolog/v2"
 	"go.uber.org/fx"
 	"go.uber.org/fx/fxevent"
 )
-
-type Config struct {
-	Level  string `koanf:"level" json:"level" yaml:"level"`
-	Pretty bool   `koanf:"pretty" json:"pretty" yaml:"pretty"`
-}
 
 func Module(cfg *Config) fx.Option {
 	return fx.Options(
@@ -27,15 +24,33 @@ func Module(cfg *Config) fx.Option {
 				var err error
 
 				if cfg.Level != "" {
-					lvl, err = zerolog.ParseLevel(cfg.Level)
+					lvl, err = cfg.Level.zerologLevel()
 					if err != nil {
 						return nil, fmt.Errorf("invalid log level %q: %w", cfg.Level, err)
 					}
 				}
 
-				if cfg.Pretty {
-					// Use console writer for pretty output
-					w = zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: "2006-01-02 15:04:05"}
+				switch cfg.Format {
+				case Console:
+					// If the format is explicitly set to "console", use console format regardless of whether the output is a terminal.
+					w = zerolog.ConsoleWriter{
+						Out:        os.Stderr,
+						NoColor:    !term.IsTerminal(int(os.Stderr.Fd())),
+						TimeFormat: "2006-01-02 15:04:05",
+					}
+				case JSON:
+					// Default is JSON, so no need to change the writer.
+
+				default:
+					// If the format is not explicitly set to "console" or "json", auto-detect based on whether the output is a terminal.
+					if term.IsTerminal(int(os.Stderr.Fd())) {
+						// If the output is a terminal, use console format for better readability.
+						w = zerolog.ConsoleWriter{
+							Out:        os.Stderr,
+							NoColor:    false,
+							TimeFormat: "2006-01-02 15:04:05",
+						}
+					}
 				}
 
 				newL := zerolog.New(w).Level(lvl).With().Timestamp().Logger()
@@ -53,7 +68,7 @@ func Module(cfg *Config) fx.Option {
 		),
 
 		fx.WithLogger(func(logger *zerolog.Logger) fxevent.Logger {
-			log := logger.Level(zerolog.InfoLevel).With().Str("library.name", "fx").Logger()
+			log := logger.Level(logger.GetLevel()).With().Str("library.name", "fx").Logger()
 			return fxeventzerolog.New(
 				&log,
 			)

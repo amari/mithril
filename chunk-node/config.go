@@ -10,6 +10,7 @@ import (
 	infrastructureetcd "github.com/amari/mithril/chunk-node/adapter/infrastructure/etcd"
 	"github.com/amari/mithril/chunk-node/adapter/infrastructure/grpc"
 	"github.com/amari/mithril/chunk-node/adapter/infrastructure/healthcheck"
+	infrastructurekoanfproviderscliflagv3 "github.com/amari/mithril/chunk-node/adapter/infrastructure/koanf/providers/cliflagv3"
 	"github.com/amari/mithril/chunk-node/adapter/infrastructure/log"
 	"github.com/amari/mithril/chunk-node/adapter/infrastructure/pprof"
 	"github.com/amari/mithril/chunk-node/adapter/node"
@@ -20,6 +21,7 @@ import (
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
+	"github.com/urfave/cli/v3"
 )
 
 type Config struct {
@@ -93,6 +95,18 @@ func LoadConfigFromEnv(k *koanf.Koanf, prefix string) error {
 
 		return key, v
 	}), nil)
+}
+
+func LoadConfigFromCLI(k *koanf.Koanf, cmd *cli.Command) error {
+	delim := "."
+
+	if err := k.Load(infrastructurekoanfproviderscliflagv3.Provider(cmd, delim, func(_ *cli.Command, flagName string) string {
+		return strings.ReplaceAll(strings.ToLower(flagName), "-", delim)
+	}), nil); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // expandKoanfValues replaces ${var} or $var in all string values in the koanf instanc based on the mapping function.
