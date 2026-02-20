@@ -1,6 +1,9 @@
 package volume
 
+import "context"
+
 type VolumeLabelCollector interface {
 	CollectVolumeLabels() (map[string]string, error)
-	Close() error
+
+	Watch(watchCtx context.Context) <-chan struct{}
 }

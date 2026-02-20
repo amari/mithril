@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"sync"
 
 	adapternodelabeler "github.com/amari/mithril/chunk-node/adapter/node/labelcollector"
 	"github.com/amari/mithril/chunk-node/port"
@@ -14,7 +13,7 @@ import (
 
 type NodeLabelService struct {
 	nodeLabeler        port.NodeLabeler
-	nodeLabelPublisher port.NodeLabelPublisher
+	nodeLabelPublisher portnode.NodeLabelPublisher
 	log                *zerolog.Logger
 
 	runtimeLabelCollector        portnode.NodeLabelCollector
@@ -23,7 +22,7 @@ type NodeLabelService struct {
 }
 
 func NewNodeLabelService(
-	nodeLabelPublisher port.NodeLabelPublisher,
+	nodeLabelPublisher portnode.NodeLabelPublisher,
 	log *zerolog.Logger,
 	runtimeLabelCollector *adapternodelabeler.Runtime,
 	kubernetesPodLabelCollector *adapternodelabeler.KubernetesPod,
@@ -86,17 +85,9 @@ func (s *NodeLabelService) CollectAndPublish(ctx context.Context) error {
 	}
 
 	// Publish to etcd
-	if err := s.nodeLabelPublisher.PublishLabels(ctx, labels); err != nil {
+	if err := s.nodeLabelPublisher.PublishNodeLabels(labels); err != nil {
 		return fmt.Errorf("failed to publish labels: %w", err)
 	}
 
 	return nil
-}
-
-type labelCollectorCache struct {
-	collector portnode.NodeLabelCollector
-
-	once   sync.Once
-	labels map[string]string
-	err    error
 }

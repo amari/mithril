@@ -102,3 +102,73 @@ const (
 	// ProtocolTypeNVMe indicates the NVMe command set.
 	ProtocolTypeNVMe ProtocolType = "nvme"
 )
+
+type VolumeIDSet struct {
+	words []uint64
+	count int
+}
+
+func NewVolumeIDSet() *VolumeIDSet {
+	return &VolumeIDSet{
+		words: nil,
+	}
+}
+
+func (b *VolumeIDSet) Add(id VolumeID) bool {
+	index := int(id / 64)
+	bit := uint64(1) << (id % 64)
+
+	if len(b.words) <= index {
+		b.words = append(b.words, make([]uint64, index+1-len(b.words))...)
+	}
+
+	if (b.words)[index]&bit != 0 {
+		return false
+	}
+
+	(b.words)[index] |= bit
+	b.count += 1
+
+	return true
+}
+
+func (b *VolumeIDSet) Remove(id VolumeID) bool {
+	index := int(id / 64)
+	bit := uint64(1) << (id % 64)
+
+	if len(b.words) <= index {
+		return false
+	}
+
+	if (b.words)[index]&bit == 0 {
+		return false
+	}
+
+	(b.words)[index] &^= bit
+	b.count -= 1
+
+	return true
+}
+
+func (b *VolumeIDSet) Contains(id VolumeID) bool {
+	index := int(id / 64)
+	bit := uint64(1) << (id % 64)
+
+	if len(b.words) <= index {
+		return false
+	}
+
+	return (b.words)[index]&bit != 0
+}
+
+func (b *VolumeIDSet) IsEmpty() bool {
+	return b.count == 0
+}
+
+func (b *VolumeIDSet) Len() int {
+	return b.count
+}
+
+func (b *VolumeIDSet) Words() []uint64 {
+	return b.words
+}

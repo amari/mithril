@@ -32,8 +32,8 @@ func Module(directoryVolumePaths []string) fx.Option {
 			NewVolumeAdmissionController,
 		),
 		fx.Provide(NewVolumeManager),
-		fx.Provide(func(nodeIdentityRepo port.NodeIdentityRepository, idAlloc volume.VolumeIDAllocator, directoryExpert volume.DirectoryVolumeExpert, volumeManager *VolumeManager, volumePicker volume.VolumePicker, log *zerolog.Logger, lc fx.Lifecycle) *VolumeService {
-			svc := NewVolumeService(nodeIdentityRepo, idAlloc, directoryExpert, volumeManager, volumePicker, log)
+		fx.Provide(func(nodeIdentityRepo port.NodeIdentityRepository, idAlloc volume.VolumeIDAllocator, directoryExpert volume.DirectoryVolumeExpert, volumeManager *VolumeManager, volumePicker volume.VolumePicker, log *zerolog.Logger, labelIndexPublisher portvolume.VolumeIDSetLabelIndexesPublisher, lc fx.Lifecycle) *VolumeService {
+			svc := NewVolumeService(nodeIdentityRepo, idAlloc, directoryExpert, volumeManager, volumePicker, log, labelIndexPublisher)
 
 			lc.Append(fx.StopHook(svc.CloseAllVolumes))
 

@@ -36,5 +36,9 @@ func Module(grpcURLs []string) fx.Option {
 
 			return NewMemberConnectionManager(dialOptions, meter, log)
 		}),
+		fx.Provide(NewLabelService),
+		fx.Invoke(func(svc *LabelService, lc fx.Lifecycle) {
+			lc.Append(fx.StartStopHook(svc.Start, svc.Stop))
+		}),
 	)
 }

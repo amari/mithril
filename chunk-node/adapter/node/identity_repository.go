@@ -10,6 +10,7 @@ import (
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/nodeerrors"
 	"github.com/amari/mithril/chunk-node/port"
+	portnode "github.com/amari/mithril/chunk-node/port/node"
 )
 
 type fileBackedNodeIdentityRepository struct {
@@ -19,9 +20,12 @@ type fileBackedNodeIdentityRepository struct {
 	nodeIdentity *domain.NodeIdentity
 }
 
-var _ port.NodeIdentityRepository = (*fileBackedNodeIdentityRepository)(nil)
+var (
+	_ port.NodeIdentityRepository = (*fileBackedNodeIdentityRepository)(nil)
+	_ portnode.NodeIDProvider     = (*fileBackedNodeIdentityRepository)(nil)
+)
 
-func NewFileBackedNodeIdentityRepository(path string) port.NodeIdentityRepository {
+func NewFileBackedNodeIdentityRepository(path string) *fileBackedNodeIdentityRepository {
 	return &fileBackedNodeIdentityRepository{
 		path: path,
 	}
@@ -75,4 +79,14 @@ func (r *fileBackedNodeIdentityRepository) StoreNodeIdentity(ctx context.Context
 	r.nodeIdentity = identity
 
 	return nil
+}
+
+// GetNodeIdentity implements NodeIdentityProvider.
+func (r *fileBackedNodeIdentityRepository) GetNodeID() (domain.NodeID, error) {
+	identity, err := r.LoadNodeIdentity(context.TODO())
+	if err != nil {
+		return 0, err
+	}
+
+	return identity.NodeID, nil
 }

@@ -3,8 +3,10 @@ package node
 import (
 	"path/filepath"
 
-	adapternodelabelcollector "github.com/amari/mithril/chunk-node/adapter/node/labelcollector"
+	adapternodelabeler "github.com/amari/mithril/chunk-node/adapter/node/labelcollector"
 	"github.com/amari/mithril/chunk-node/port"
+	portnode "github.com/amari/mithril/chunk-node/port/node"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"go.uber.org/fx"
 )
 
@@ -23,14 +25,29 @@ type ConfigAdvertiseGRPC struct {
 
 func Module(cfg *Config, dataDir string) fx.Option {
 	return fx.Module("node",
+		fx.Provide(
+			NewClusterPublisher,
+			func(p *EtcdClusterPublisher) portnode.NodeLabelPublisher {
+				return p
+			},
+			func(p *EtcdClusterPublisher) portvolume.VolumeIDSetLabelIndexesPublisher {
+				return p
+			},
+		),
 		fx.Provide(NewIdentityAllocator),
 		fx.Provide(NewSeedGenerator),
-		fx.Provide(NewNodeLabelPublisher),
 		fx.Provide(NewNodeAnnouncer),
 		fx.Provide(NewMemberResolver),
 		fx.Provide(NewMemberWatchManager),
 		fx.Supply(fx.Annotate(NewFileBackedNodeSeedRepository(filepath.Join(dataDir, "node_seed.json")), fx.As(new(port.NodeSeedRepository)))),
-		fx.Supply(fx.Annotate(NewFileBackedNodeIdentityRepository(filepath.Join(dataDir, "node_identity.json")), fx.As(new(port.NodeIdentityRepository)))),
-		adapternodelabelcollector.Module(cfg.Labels),
+		fx.Supply(NewFileBackedNodeIdentityRepository(filepath.Join(dataDir, "node_identity.json"))),
+		fx.Provide(
+			func(f *fileBackedNodeIdentityRepository) port.NodeIdentityRepository {
+				return f
+			}, func(f *fileBackedNodeIdentityRepository) portnode.NodeIDProvider {
+				return f
+			},
+		),
+		adapternodelabeler.Module(cfg.Labels),
 	)
 }

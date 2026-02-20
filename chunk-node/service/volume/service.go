@@ -27,19 +27,19 @@ type VolumeService struct {
 	characteristics map[domain.VolumeID]*domain.VolumeCharacteristics
 	attributes      map[domain.VolumeID][]attribute.KeyValue
 	labels          map[domain.VolumeID]map[string]string
-	labelIndex      map[string][]domain.VolumeID
-	labelBits       map[string]portvolume.VolumeBitset
+	labelIndex      map[string]map[string][]domain.VolumeID
+	labelIDSets     map[string]map[string]*domain.VolumeIDSet
 	loggerFields    map[domain.VolumeID][]any
 	stats           map[domain.VolumeID]portvolume.VolumeStatsCollector
+
+	labelIndexPublisher portvolume.VolumeIDSetLabelIndexesPublisher
 }
 
 var (
-	_ portvolume.VolumeCharacteristicsProvider    = (*VolumeService)(nil)
-	_ portvolume.VolumeLabelProvider              = (*VolumeService)(nil)
-	_ portvolume.VolumeLabelIndexProvider         = (*VolumeService)(nil)
-	_ portvolume.VolumeBitsetLabelIndexProvider   = (*VolumeService)(nil)
-	_ portvolume.VolumeBitsetLabelIndexesProvider = (*VolumeService)(nil)
-	_ portvolume.VolumeTelemetryProvider          = (*VolumeService)(nil)
+	_ portvolume.VolumeCharacteristicsProvider = (*VolumeService)(nil)
+	_ portvolume.VolumeLabelToIDsIndex         = (*VolumeService)(nil)
+	_ portvolume.VolumeLabelToIDSetIndex       = (*VolumeService)(nil)
+	_ portvolume.VolumeTelemetryProvider       = (*VolumeService)(nil)
 )
 
 func NewVolumeService(
@@ -49,6 +49,7 @@ func NewVolumeService(
 	manager *VolumeManager,
 	picker volume.VolumePicker,
 	log *zerolog.Logger,
+	labelIndexPublisher portvolume.VolumeIDSetLabelIndexesPublisher,
 ) *VolumeService {
 	return &VolumeService{
 		nodeIdentityRepo: nodeIdentityRepo,
@@ -61,10 +62,12 @@ func NewVolumeService(
 		characteristics: make(map[domain.VolumeID]*domain.VolumeCharacteristics),
 		attributes:      make(map[domain.VolumeID][]attribute.KeyValue),
 		labels:          make(map[domain.VolumeID]map[string]string),
-		labelIndex:      make(map[string][]domain.VolumeID),
-		labelBits:       make(map[string]portvolume.VolumeBitset),
+		labelIndex:      make(map[string]map[string][]domain.VolumeID),
+		labelIDSets:     make(map[string]map[string]*domain.VolumeIDSet),
 		loggerFields:    make(map[domain.VolumeID][]any),
 		stats:           make(map[domain.VolumeID]portvolume.VolumeStatsCollector),
+
+		labelIndexPublisher: labelIndexPublisher,
 	}
 }
 
@@ -119,10 +122,32 @@ func (s *VolumeService) AddDirectoryVolume(ctx context.Context, path string, for
 	labels := buildVolumeLabels(characteristics)
 	s.labels[volumeID] = labels
 
-	for label := range labels {
-		s.labelIndex[label] = append(s.labelIndex[label], volumeID)
+	for key, value := range labels {
+		volumeIDByLabelValue, ok := s.labelIndex[key]
+		if !ok {
+			volumeIDByLabelValue = make(map[string][]domain.VolumeID)
+			s.labelIndex[key] = volumeIDByLabelValue
+		}
+		volumeIDByLabelValue[value] = append(volumeIDByLabelValue[value], volumeID)
 
-		// TODO: Update bitset index
+		// Update bitset index
+		volumeIDSetByLabelValue, ok := s.labelIDSets[key]
+		if !ok {
+			volumeIDSetByLabelValue = make(map[string]*domain.VolumeIDSet)
+			s.labelIDSets[key] = volumeIDSetByLabelValue
+		}
+		bitset, ok := volumeIDSetByLabelValue[value]
+		if !ok {
+			bitset = domain.NewVolumeIDSet()
+
+			volumeIDSetByLabelValue[value] = bitset
+		}
+		bitset.Add(volumeID)
+	}
+
+	// Publish updated label indexes
+	if s.labelIndexPublisher != nil {
+		s.labelIndexPublisher.PublishVolumeIDSetLabelIndexes(s.labelIDSets)
 	}
 
 	// Start stats collecting
@@ -238,19 +263,32 @@ func (s *VolumeService) GetVolumeLabels(id domain.VolumeID) map[string]string {
 	return labels
 }
 
-// GetVolumesWithLabel implements VolumeLabelIndexProvider.
-func (s *VolumeService) GetVolumesWithLabel(label string) []domain.VolumeID {
-	return s.labelIndex[label]
+func (s *VolumeService) GetVolumeIDsByLabel(key, value string) []domain.VolumeID {
+	a, ok := s.labelIndex[key]
+	if !ok {
+		return nil
+	}
+	b, ok := a[value]
+	if !ok {
+		return nil
+	}
+	return b
 }
 
-// GetVolumeBitsetWithLabel implements VolumeBitsetLabelIndexProvider.
-func (s *VolumeService) GetVolumeBitsetWithLabel(label string) portvolume.VolumeBitset {
-	return s.labelBits[label]
+func (s *VolumeService) GetVolumeIDSetByLabel(key, value string) *domain.VolumeIDSet {
+	a, ok := s.labelIDSets[key]
+	if !ok {
+		return nil
+	}
+	b, ok := a[value]
+	if !ok {
+		return nil
+	}
+	return b
 }
 
-// GetAllBitsetLabelIndexes implements VolumeBitsetLabelIndexesProvider.
-func (s *VolumeService) GetAllBitsetLabelIndexes() map[string]portvolume.VolumeBitset {
-	return s.labelBits
+func (s *VolumeService) GetAllVolumeIDSets() map[string]map[string]*domain.VolumeIDSet {
+	return s.labelIDSets
 }
 
 // GetVolumeStats implements VolumeStatsProvider.
