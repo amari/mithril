@@ -1,6 +1,6 @@
 //go:generate msgp
 
-package chunk
+package adapterchunk
 
 import (
 	"errors"

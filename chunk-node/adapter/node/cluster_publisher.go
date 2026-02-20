@@ -1,4 +1,4 @@
-package node
+package adapternode
 
 import (
 	"encoding/binary"
@@ -6,7 +6,7 @@ import (
 
 	infrastructureetcd "github.com/amari/mithril/chunk-node/adapter/infrastructure/etcd"
 	"github.com/amari/mithril/chunk-node/domain"
-	portnode "github.com/amari/mithril/chunk-node/port/portnode"
+	portnode "github.com/amari/mithril/chunk-node/port/node"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	nodev1 "github.com/amari/mithril/gen/go/proto/mithril/cluster/node/v1"
 	"github.com/rs/zerolog"

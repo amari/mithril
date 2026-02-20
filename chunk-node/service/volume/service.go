@@ -8,7 +8,7 @@ import (
 	volumedirectorystatscollector "github.com/amari/mithril/chunk-node/adapter/volume/directory/statscollector"
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port"
-	"github.com/amari/mithril/chunk-node/port/volume"
+
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/volumeerrors"
 	"github.com/rs/zerolog"
@@ -17,10 +17,10 @@ import (
 
 type VolumeService struct {
 	nodeIdentityRepo port.NodeIdentityRepository
-	idAlloc          volume.VolumeIDAllocator
-	directoryExpert  volume.DirectoryVolumeExpert
+	idAlloc          portvolume.VolumeIDAllocator
+	directoryExpert  portvolume.DirectoryVolumeExpert
 	manager          *VolumeManager
-	picker           volume.VolumePicker
+	picker           portvolume.VolumePicker
 
 	log *zerolog.Logger
 
@@ -44,10 +44,10 @@ var (
 
 func NewVolumeService(
 	nodeIdentityRepo port.NodeIdentityRepository,
-	idAlloc volume.VolumeIDAllocator,
-	directoryExpert volume.DirectoryVolumeExpert,
+	idAlloc portvolume.VolumeIDAllocator,
+	directoryExpert portvolume.DirectoryVolumeExpert,
 	manager *VolumeManager,
-	picker volume.VolumePicker,
+	picker portvolume.VolumePicker,
 	log *zerolog.Logger,
 	labelIndexPublisher portvolume.VolumeIDSetLabelIndexesPublisher,
 ) *VolumeService {

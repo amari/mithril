@@ -2,14 +2,14 @@ package picker
 
 import (
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 )
 
 type HealthPickFilter struct {
-	HealthChecker volume.VolumeHealthChecker
+	HealthChecker portvolume.VolumeHealthChecker
 }
 
-var _ volume.VolumeIDPickFilter = (*HealthPickFilter)(nil)
+var _ portvolume.VolumeIDPickFilter = (*HealthPickFilter)(nil)
 
 func (f *HealthPickFilter) FilterVolumeIDPick(v domain.VolumeID) bool {
 	if f.HealthChecker == nil {

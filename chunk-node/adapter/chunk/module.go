@@ -1,10 +1,10 @@
-package chunk
+package adapterchunk
 
 import (
 	"path/filepath"
 
 	infrastructurepebble "github.com/amari/mithril/chunk-node/adapter/infrastructure/pebble"
-	"github.com/amari/mithril/chunk-node/port/chunk"
+	portchunk "github.com/amari/mithril/chunk-node/port/chunk"
 	"github.com/cockroachdb/pebble/v2"
 	"github.com/rs/zerolog"
 	"go.uber.org/fx"
@@ -13,7 +13,7 @@ import (
 func Module(dataDir string) fx.Option {
 	return fx.Module("chunk",
 		fx.Provide(NewChunkIDGenerator),
-		fx.Provide(func(log *zerolog.Logger, lc fx.Lifecycle) (chunk.ChunkRepository, error) {
+		fx.Provide(func(log *zerolog.Logger, lc fx.Lifecycle) (portchunk.ChunkRepository, error) {
 			dbCfg := &infrastructurepebble.Config{
 				Dir: filepath.Join(dataDir, "chunkDB"),
 			}

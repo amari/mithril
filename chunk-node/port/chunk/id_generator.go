@@ -1,4 +1,4 @@
-package chunk
+package portchunk
 
 import "github.com/amari/mithril/chunk-node/domain"
 

@@ -6,8 +6,8 @@ import (
 	adaptervolumetelemetry "github.com/amari/mithril/chunk-node/adapter/volume/telemetry"
 	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/chunk"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portchunk "github.com/amari/mithril/chunk-node/port/chunk"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 )
 
 type StatChunkInput struct {
@@ -21,17 +21,17 @@ type StatChunkOutput struct {
 }
 
 type StatChunkHandler struct {
-	Repo                      chunk.ChunkRepository
-	VolumeAdmissionController volume.VolumeAdmissionController
-	VolumeHealthChecker       volume.VolumeHealthChecker
-	VolumeTelemetryProvider   volume.VolumeTelemetryProvider
+	Repo                      portchunk.ChunkRepository
+	VolumeAdmissionController portvolume.VolumeAdmissionController
+	VolumeHealthChecker       portvolume.VolumeHealthChecker
+	VolumeTelemetryProvider   portvolume.VolumeTelemetryProvider
 }
 
 func NewStatChunkHandler(
-	repo chunk.ChunkRepository,
-	volumeAdmissionController volume.VolumeAdmissionController,
-	volumeHealthChecker volume.VolumeHealthChecker,
-	volumeTelemetryProvider volume.VolumeTelemetryProvider,
+	repo portchunk.ChunkRepository,
+	volumeAdmissionController portvolume.VolumeAdmissionController,
+	volumeHealthChecker portvolume.VolumeHealthChecker,
+	volumeTelemetryProvider portvolume.VolumeTelemetryProvider,
 ) *StatChunkHandler {
 	return &StatChunkHandler{
 		Repo:                      repo,
@@ -48,7 +48,7 @@ func (h *StatChunkHandler) HandleStatChunk(ctx context.Context, input *StatChunk
 	)
 
 	if len(input.ChunkID) > 0 {
-		id, err := chunk.ChunkIDFromBytes(input.ChunkID)
+		id, err := portchunk.ChunkIDFromBytes(input.ChunkID)
 		if err != nil {
 			return nil, err
 		}

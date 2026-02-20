@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/amari/mithril/chunk-node/adapter/chunk"
+	adapterchunk "github.com/amari/mithril/chunk-node/adapter/chunk"
 	"github.com/amari/mithril/chunk-node/adapter/infrastructure/etcd"
 	"github.com/amari/mithril/chunk-node/adapter/infrastructure/grpc"
 	"github.com/amari/mithril/chunk-node/adapter/infrastructure/healthcheck"
@@ -14,7 +14,7 @@ import (
 	"github.com/amari/mithril/chunk-node/adapter/infrastructure/maxprocs"
 	"github.com/amari/mithril/chunk-node/adapter/infrastructure/otel"
 	"github.com/amari/mithril/chunk-node/adapter/infrastructure/pprof"
-	"github.com/amari/mithril/chunk-node/adapter/node"
+	adapternode "github.com/amari/mithril/chunk-node/adapter/node"
 	remotechunknodegrpc "github.com/amari/mithril/chunk-node/adapter/remotechunknode/grpc"
 	"github.com/amari/mithril/chunk-node/adapter/volume"
 	"github.com/amari/mithril/chunk-node/service"
@@ -132,10 +132,10 @@ func buildServerCommand() *cli.Command {
 				pprof.Module(&cfg.Pprof),
 				remotechunknodegrpc.Module(),
 
-				volume.Module(dataDir),
+				adaptervolume.Module(dataDir),
 
-				chunk.Module(dataDir),
-				node.Module(&cfg.Node, dataDir),
+				adapterchunk.Module(dataDir),
+				adapternode.Module(&cfg.Node, dataDir),
 				transport.Module(),
 				service.Module(argServerVolumes, cfg.Node.Advertise.GRPC.URLs),
 			).Run()

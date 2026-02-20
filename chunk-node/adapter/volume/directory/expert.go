@@ -12,16 +12,16 @@ import (
 	"time"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/volumeerrors"
 )
 
 type directoryVolumeExpert struct{}
 
-var _ volume.DirectoryVolumeExpert = (*directoryVolumeExpert)(nil)
+var _ portvolume.DirectoryVolumeExpert = (*directoryVolumeExpert)(nil)
 
 // NewDirectoryVolumeExpert creates a new instance of DirectoryVolumeExpert.
-func NewDirectoryVolumeExpert() volume.DirectoryVolumeExpert {
+func NewDirectoryVolumeExpert() portvolume.DirectoryVolumeExpert {
 	return &directoryVolumeExpert{}
 }
 
@@ -121,7 +121,7 @@ func (d *directoryVolumeExpert) ReadDirectoryVolume(ctx context.Context, path st
 	return domain.NodeID(format.NodeID), domain.VolumeID(format.VolumeID), nil
 }
 
-func (d *directoryVolumeExpert) OpenDirectoryVolume(ctx context.Context, path string, nodeID domain.NodeID) (volume.Volume, error) {
+func (d *directoryVolumeExpert) OpenDirectoryVolume(ctx context.Context, path string, nodeID domain.NodeID) (portvolume.Volume, error) {
 	f, err := os.Open(filepath.Join(path, ".mithril.sys", "format.json"))
 	if err != nil {
 		if os.IsNotExist(err) {

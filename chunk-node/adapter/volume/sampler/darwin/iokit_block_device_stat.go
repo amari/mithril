@@ -11,7 +11,7 @@ import (
 
 	iokit "github.com/amari/mithril/chunk-node/darwin"
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 )
 
 // IOKitBlockDeviceStatSamplerOptions contains configuration options for IOKitBlockDeviceStatSampler.
@@ -45,7 +45,7 @@ type IOKitBlockDeviceStatSampler struct {
 	doneCh     chan struct{}
 }
 
-var _ volume.Sampler[*domain.BlockDeviceStats] = (*IOKitBlockDeviceStatSampler)(nil)
+var _ portvolume.Sampler[*domain.BlockDeviceStats] = (*IOKitBlockDeviceStatSampler)(nil)
 
 // NewIOKitBlockDeviceStatSamplerWithPath creates a new sampler for the block device at the given filesystem path.
 func NewIOKitBlockDeviceStatSamplerWithPath(path string, opts IOKitBlockDeviceStatSamplerOptions) (*IOKitBlockDeviceStatSampler, error) {

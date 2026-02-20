@@ -1,4 +1,4 @@
-package volume
+package adaptervolume
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/volumeerrors"
 	"github.com/cockroachdb/pebble/v2"
 )
@@ -21,7 +21,7 @@ type pebbleVolumeIDAllocator struct {
 	nextVolumeID uint32
 }
 
-var _ volume.VolumeIDAllocator = (*pebbleVolumeIDAllocator)(nil)
+var _ portvolume.VolumeIDAllocator = (*pebbleVolumeIDAllocator)(nil)
 
 func NewPebbleVolumeIDAllocator(db *pebble.DB) (*pebbleVolumeIDAllocator, error) {
 	var nextVolumeID uint32 = 1

@@ -12,7 +12,7 @@ import (
 	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port"
-	"github.com/amari/mithril/chunk-node/port/chunk"
+	portchunk "github.com/amari/mithril/chunk-node/port/chunk"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/service/volume"
 )
@@ -30,7 +30,7 @@ type PutChunkOutput struct {
 }
 
 type PutChunkHandler struct {
-	Repo                      chunk.ChunkRepository
+	Repo                      portchunk.ChunkRepository
 	IDGen                     port.ChunkIDGenerator
 	VolumeAdmissionController portvolume.VolumeAdmissionController
 	VolumeManager             *volume.VolumeManager
@@ -43,7 +43,7 @@ type PutChunkHandler struct {
 }
 
 func NewPutChunkHandler(
-	repo chunk.ChunkRepository,
+	repo portchunk.ChunkRepository,
 	idGen port.ChunkIDGenerator,
 	volumeAdmissionController portvolume.VolumeAdmissionController,
 	volumeManager *volume.VolumeManager,

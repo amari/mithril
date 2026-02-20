@@ -7,7 +7,7 @@ import (
 	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port"
-	"github.com/amari/mithril/chunk-node/port/chunk"
+	portchunk "github.com/amari/mithril/chunk-node/port/chunk"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/service/volume"
 	"github.com/rs/zerolog"
@@ -27,7 +27,7 @@ type ReadChunkOutput struct {
 }
 
 type ReadChunkHandler struct {
-	Repo                      chunk.ChunkRepository
+	Repo                      portchunk.ChunkRepository
 	VolumeManager             *volume.VolumeManager
 	VolumeAdmissionController portvolume.VolumeAdmissionController
 	VolumeHealthChecker       portvolume.VolumeHealthChecker
@@ -35,7 +35,7 @@ type ReadChunkHandler struct {
 }
 
 func NewReadChunkHandler(
-	repo chunk.ChunkRepository,
+	repo portchunk.ChunkRepository,
 	volumeManager *volume.VolumeManager,
 	volumeAdmissionController portvolume.VolumeAdmissionController,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
@@ -57,7 +57,7 @@ func (h *ReadChunkHandler) HandleReadChunk(ctx context.Context, input *ReadChunk
 	)
 
 	if len(input.ChunkID) > 0 {
-		id, err := chunk.ChunkIDFromBytes(input.ChunkID)
+		id, err := portchunk.ChunkIDFromBytes(input.ChunkID)
 		if err != nil {
 			return nil, err
 		}

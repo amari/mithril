@@ -1,4 +1,4 @@
-package node
+package portnode
 
 import "github.com/amari/mithril/chunk-node/domain"
 

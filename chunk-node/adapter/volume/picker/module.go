@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"go.uber.org/fx"
 )
 
@@ -15,7 +15,7 @@ type Config struct {
 
 func Module() fx.Option {
 	return fx.Module("volume.picker",
-		fx.Provide(func() volume.VolumePicker {
+		fx.Provide(func() portvolume.VolumePicker {
 			return &RoundRobin{}
 		}),
 	)

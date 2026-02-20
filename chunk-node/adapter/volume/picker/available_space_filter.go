@@ -2,15 +2,15 @@ package picker
 
 import (
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 )
 
 type AvailableSpacePickFilter struct {
 	MinFreeSpaceBytes   int64
-	VolumeStatsProvider volume.VolumeStatsProvider
+	VolumeStatsProvider portvolume.VolumeStatsProvider
 }
 
-var _ volume.VolumeIDPickFilter = (*AvailableSpacePickFilter)(nil)
+var _ portvolume.VolumeIDPickFilter = (*AvailableSpacePickFilter)(nil)
 
 func (f *AvailableSpacePickFilter) FilterVolumeIDPick(v domain.VolumeID) bool {
 	if f.VolumeStatsProvider == nil {

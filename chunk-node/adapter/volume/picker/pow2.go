@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/volumeerrors"
 )
 
@@ -20,9 +20,9 @@ type PowerOfTwo struct {
 	volumeIDSlice []domain.VolumeID
 }
 
-var _ volume.VolumePicker = (*PowerOfTwo)(nil)
+var _ portvolume.VolumePicker = (*PowerOfTwo)(nil)
 
-func (p *PowerOfTwo) PickVolumeID(opts volume.PickVolumeIDOptions) (domain.VolumeID, error) {
+func (p *PowerOfTwo) PickVolumeID(opts portvolume.PickVolumeIDOptions) (domain.VolumeID, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

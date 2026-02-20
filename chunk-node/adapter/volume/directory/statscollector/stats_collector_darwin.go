@@ -9,7 +9,7 @@ import (
 	samplerdarwin "github.com/amari/mithril/chunk-node/adapter/volume/sampler/darwin"
 	samplerunix "github.com/amari/mithril/chunk-node/adapter/volume/sampler/unix"
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 )
 
 type darwinDirectoryVolumeStatsCollector struct {
@@ -19,7 +19,7 @@ type darwinDirectoryVolumeStatsCollector struct {
 	spaceUtilization *samplerunix.StatfsSpaceUtilizationStatSampler
 }
 
-var _ volume.VolumeStatsCollector = (*darwinDirectoryVolumeStatsCollector)(nil)
+var _ portvolume.VolumeStatsCollector = (*darwinDirectoryVolumeStatsCollector)(nil)
 
 func newDirectoryVolumeStatsCollector(opts DirectoryVolumeStatsCollectorOptions) (*darwinDirectoryVolumeStatsCollector, error) {
 	blockDevice, err := samplerdarwin.NewIOKitBlockDeviceStatSamplerWithPath(

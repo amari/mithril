@@ -2,14 +2,14 @@ package picker
 
 import (
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 )
 
-type chainPickFilter []volume.VolumeIDPickFilter
+type chainPickFilter []portvolume.VolumeIDPickFilter
 
-var _ volume.VolumeIDPickFilter = (*chainPickFilter)(nil)
+var _ portvolume.VolumeIDPickFilter = (*chainPickFilter)(nil)
 
-func ChainPickFilter(filters ...volume.VolumeIDPickFilter) volume.VolumeIDPickFilter {
+func ChainPickFilter(filters ...portvolume.VolumeIDPickFilter) portvolume.VolumeIDPickFilter {
 	return chainPickFilter(filters)
 }
 

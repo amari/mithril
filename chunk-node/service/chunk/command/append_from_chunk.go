@@ -8,7 +8,7 @@ import (
 	adaptervolumetelemetry "github.com/amari/mithril/chunk-node/adapter/volume/telemetry"
 	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/chunk"
+	portchunk "github.com/amari/mithril/chunk-node/port/chunk"
 	portremotechunknode "github.com/amari/mithril/chunk-node/port/remotechunknode"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/service/volume"
@@ -32,7 +32,7 @@ type AppendFromChunkOutput struct {
 }
 
 type AppendFromChunkHandler struct {
-	Repo                      chunk.ChunkRepository
+	Repo                      portchunk.ChunkRepository
 	VolumeAdmissionController portvolume.VolumeAdmissionController
 	VolumeHealthChecker       portvolume.VolumeHealthChecker
 	VolumeManager             *volume.VolumeManager
@@ -42,7 +42,7 @@ type AppendFromChunkHandler struct {
 }
 
 func NewAppendFromChunkHandler(
-	repo chunk.ChunkRepository,
+	repo portchunk.ChunkRepository,
 	volumeAdmissionController portvolume.VolumeAdmissionController,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
 	volumeManager *volume.VolumeManager,
@@ -61,7 +61,7 @@ func NewAppendFromChunkHandler(
 }
 
 func (h *AppendFromChunkHandler) HandleAppendFromChunk(ctx context.Context, input *AppendFromChunkInput) (*AppendFromChunkOutput, error) {
-	remoteChunkID, err := chunk.ChunkIDFromBytes(input.RemoteChunkID)
+	remoteChunkID, err := portchunk.ChunkIDFromBytes(input.RemoteChunkID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid remote chunk ID: %w", err)
 	}

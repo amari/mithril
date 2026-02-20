@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/volumeerrors"
 )
 
@@ -16,9 +16,9 @@ type RoundRobin struct {
 	volumeIDSlice []domain.VolumeID
 }
 
-var _ volume.VolumePicker = (*RoundRobin)(nil)
+var _ portvolume.VolumePicker = (*RoundRobin)(nil)
 
-func (rr *RoundRobin) PickVolumeID(opts volume.PickVolumeIDOptions) (domain.VolumeID, error) {
+func (rr *RoundRobin) PickVolumeID(opts portvolume.PickVolumeIDOptions) (domain.VolumeID, error) {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 

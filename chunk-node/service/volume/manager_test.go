@@ -6,7 +6,7 @@ import (
 
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/volumeerrors"
 )
 
@@ -34,7 +34,7 @@ func (m *mockVolume) Chunks() port.ChunkStore {
 }
 
 // Verify mockVolume implements volume.Volume
-var _ volume.Volume = (*mockVolume)(nil)
+var _ portvolume.Volume = (*mockVolume)(nil)
 
 func TestNewVolumeManager(t *testing.T) {
 	m := NewVolumeManager()

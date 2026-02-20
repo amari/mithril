@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/volumeerrors"
 )
 
@@ -18,9 +18,9 @@ type Random struct {
 	Rand *rand.Rand
 }
 
-var _ volume.VolumePicker = (*Random)(nil)
+var _ portvolume.VolumePicker = (*Random)(nil)
 
-func (r *Random) PickVolumeID(opts volume.PickVolumeIDOptions) (domain.VolumeID, error) {
+func (r *Random) PickVolumeID(opts portvolume.PickVolumeIDOptions) (domain.VolumeID, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 

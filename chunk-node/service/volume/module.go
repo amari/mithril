@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/amari/mithril/chunk-node/port"
-	"github.com/amari/mithril/chunk-node/port/volume"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/rs/zerolog"
 	"go.uber.org/fx"
@@ -32,7 +31,7 @@ func Module(directoryVolumePaths []string) fx.Option {
 			NewVolumeAdmissionController,
 		),
 		fx.Provide(NewVolumeManager),
-		fx.Provide(func(nodeIdentityRepo port.NodeIdentityRepository, idAlloc volume.VolumeIDAllocator, directoryExpert volume.DirectoryVolumeExpert, volumeManager *VolumeManager, volumePicker volume.VolumePicker, log *zerolog.Logger, labelIndexPublisher portvolume.VolumeIDSetLabelIndexesPublisher, lc fx.Lifecycle) *VolumeService {
+		fx.Provide(func(nodeIdentityRepo port.NodeIdentityRepository, idAlloc portvolume.VolumeIDAllocator, directoryExpert portvolume.DirectoryVolumeExpert, volumeManager *VolumeManager, volumePicker portvolume.VolumePicker, log *zerolog.Logger, labelIndexPublisher portvolume.VolumeIDSetLabelIndexesPublisher, lc fx.Lifecycle) *VolumeService {
 			svc := NewVolumeService(nodeIdentityRepo, idAlloc, directoryExpert, volumeManager, volumePicker, log, labelIndexPublisher)
 
 			lc.Append(fx.StopHook(svc.CloseAllVolumes))

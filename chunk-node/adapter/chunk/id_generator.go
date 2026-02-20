@@ -1,4 +1,4 @@
-package chunk
+package adapterchunk
 
 import (
 	"sync"

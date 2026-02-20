@@ -6,7 +6,7 @@ import (
 
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 )
 
 type directoryVolume struct {
@@ -16,14 +16,14 @@ type directoryVolume struct {
 	chunkStore *directoryChunkStore
 }
 
-var _ volume.Volume = (*directoryVolume)(nil)
+var _ portvolume.Volume = (*directoryVolume)(nil)
 
 type DirectoryVolumeOptions struct {
 	Path       string
 	BufferSize int
 }
 
-func NewDirectoryVolume(volumeID domain.VolumeID, options DirectoryVolumeOptions) (volume.Volume, error) {
+func NewDirectoryVolume(volumeID domain.VolumeID, options DirectoryVolumeOptions) (portvolume.Volume, error) {
 	root, err := OpenRoot(options.Path)
 	if err != nil {
 		return nil, err

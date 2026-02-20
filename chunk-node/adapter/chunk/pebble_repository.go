@@ -1,4 +1,4 @@
-package chunk
+package adapterchunk
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/amari/mithril/chunk-node/adapter/tuple"
 	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/chunk"
+	portchunk "github.com/amari/mithril/chunk-node/port/chunk"
 	"github.com/cockroachdb/pebble/v2"
 )
 
@@ -17,9 +17,9 @@ type pebbleChunkRepository struct {
 	DB *pebble.DB
 }
 
-var _ chunk.ChunkRepository = (*pebbleChunkRepository)(nil)
+var _ portchunk.ChunkRepository = (*pebbleChunkRepository)(nil)
 
-func NewPebbleChunkRepository(db *pebble.DB) chunk.ChunkRepository {
+func NewPebbleChunkRepository(db *pebble.DB) portchunk.ChunkRepository {
 	return &pebbleChunkRepository{
 		DB: db,
 	}

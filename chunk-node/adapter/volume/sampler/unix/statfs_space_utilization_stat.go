@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"golang.org/x/sys/unix"
 )
 
@@ -46,7 +46,7 @@ type StatfsSpaceUtilizationStatSampler struct {
 	doneCh     chan struct{}
 }
 
-var _ volume.Sampler[*domain.SpaceUtilizationStats] = (*StatfsSpaceUtilizationStatSampler)(nil)
+var _ portvolume.Sampler[*domain.SpaceUtilizationStats] = (*StatfsSpaceUtilizationStatSampler)(nil)
 
 // NewStatfsSpaceUtilizationStatSampler creates a new sampler for the filesystem at the given path.
 func NewStatfsSpaceUtilizationStatSampler(path string, opts StatfsSpaceUtilizationStatSamplerOptions) (*StatfsSpaceUtilizationStatSampler, error) {

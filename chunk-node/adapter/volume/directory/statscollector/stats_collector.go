@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 )
 
 type DirectoryVolumeStatsCollectorOptions struct {
@@ -14,6 +14,6 @@ type DirectoryVolumeStatsCollectorOptions struct {
 	PollInterval time.Duration
 }
 
-func NewDirectoryVolumeStatsCollector(opts DirectoryVolumeStatsCollectorOptions) (volume.VolumeStatsCollector, error) {
+func NewDirectoryVolumeStatsCollector(opts DirectoryVolumeStatsCollectorOptions) (portvolume.VolumeStatsCollector, error) {
 	return newDirectoryVolumeStatsCollector(opts)
 }

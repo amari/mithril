@@ -5,24 +5,24 @@ import (
 	"sync"
 
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/volumeerrors"
 )
 
 type VolumeManager struct {
 	mu sync.RWMutex
 
-	volumeSlice []volume.Volume
-	volumeMap   map[domain.VolumeID]volume.Volume
+	volumeSlice []portvolume.Volume
+	volumeMap   map[domain.VolumeID]portvolume.Volume
 }
 
 func NewVolumeManager() *VolumeManager {
 	return &VolumeManager{
-		volumeMap: make(map[domain.VolumeID]volume.Volume),
+		volumeMap: make(map[domain.VolumeID]portvolume.Volume),
 	}
 }
 
-func (m *VolumeManager) Volumes() []volume.Volume {
+func (m *VolumeManager) Volumes() []portvolume.Volume {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -40,7 +40,7 @@ func (m *VolumeManager) VolumeIDs() []domain.VolumeID {
 	return ids
 }
 
-func (m *VolumeManager) GetVolumeByID(id domain.VolumeID) (volume.Volume, error) {
+func (m *VolumeManager) GetVolumeByID(id domain.VolumeID) (portvolume.Volume, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -53,7 +53,7 @@ func (m *VolumeManager) GetVolumeByID(id domain.VolumeID) (volume.Volume, error)
 	return v, nil
 }
 
-func (m *VolumeManager) AddVolume(v volume.Volume) {
+func (m *VolumeManager) AddVolume(v portvolume.Volume) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -65,7 +65,7 @@ func (m *VolumeManager) RemoveVolume(id domain.VolumeID) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.volumeSlice = slices.DeleteFunc(m.volumeSlice, func(v volume.Volume) bool {
+	m.volumeSlice = slices.DeleteFunc(m.volumeSlice, func(v portvolume.Volume) bool {
 		return v.ID() == id
 	})
 
@@ -77,11 +77,11 @@ func (m *VolumeManager) ClearVolumes() {
 	defer m.mu.Unlock()
 
 	m.volumeSlice = nil
-	m.volumeMap = make(map[domain.VolumeID]volume.Volume)
+	m.volumeMap = make(map[domain.VolumeID]portvolume.Volume)
 }
 
 // GetVolume implements the VolumeProvider interface.
-func (m *VolumeManager) GetVolume(id domain.VolumeID) volume.Volume {
+func (m *VolumeManager) GetVolume(id domain.VolumeID) portvolume.Volume {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 

@@ -9,7 +9,7 @@ import (
 	adaptervolumetelemetry "github.com/amari/mithril/chunk-node/adapter/volume/telemetry"
 	"github.com/amari/mithril/chunk-node/chunkerrors"
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/chunk"
+	portchunk "github.com/amari/mithril/chunk-node/port/chunk"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 	"github.com/amari/mithril/chunk-node/service/volume"
 	"github.com/amari/mithril/chunk-node/volumeerrors"
@@ -30,7 +30,7 @@ type AppendChunkOutput struct {
 }
 
 type AppendChunkHandler struct {
-	Repo                      chunk.ChunkRepository
+	Repo                      portchunk.ChunkRepository
 	VolumeAdmissionController portvolume.VolumeAdmissionController
 	VolumeHealthChecker       portvolume.VolumeHealthChecker
 	VolumeManager             *volume.VolumeManager
@@ -39,7 +39,7 @@ type AppendChunkHandler struct {
 }
 
 func NewAppendChunkHandler(
-	repo chunk.ChunkRepository,
+	repo portchunk.ChunkRepository,
 	volumeAdmissionController portvolume.VolumeAdmissionController,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
 	volumeManager *volume.VolumeManager,

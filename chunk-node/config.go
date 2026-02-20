@@ -13,7 +13,7 @@ import (
 	infrastructurekoanfproviderscliflagv3 "github.com/amari/mithril/chunk-node/adapter/infrastructure/koanf/providers/cliflagv3"
 	"github.com/amari/mithril/chunk-node/adapter/infrastructure/log"
 	"github.com/amari/mithril/chunk-node/adapter/infrastructure/pprof"
-	"github.com/amari/mithril/chunk-node/adapter/node"
+	adapternode "github.com/amari/mithril/chunk-node/adapter/node"
 	"github.com/amari/mithril/chunk-node/service/volume"
 	"github.com/knadh/koanf/parsers/json"
 	"github.com/knadh/koanf/parsers/toml"
@@ -30,7 +30,7 @@ type Config struct {
 	GRPC        grpc.ServerConfig         `koanf:"grpc"`
 	HealthCheck healthcheck.Config        `koanf:"healthCheck"`
 	Log         log.Config                `koanf:"log"`
-	Node        node.Config               `koanf:"node"`
+	Node        adapternode.Config        `koanf:"node"`
 	Pprof       pprof.Config              `koanf:"pprof"`
 
 	volume.Config `koanf:",squash"`
