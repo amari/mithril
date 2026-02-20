@@ -2,14 +2,15 @@ package node
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/binary"
 	"fmt"
-	"strconv"
 
 	infrastructureetcd "github.com/amari/mithril/chunk-node/adapter/infrastructure/etcd"
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port"
+	nodev1 "github.com/amari/mithril/gen/go/proto/mithril/cluster/node/v1"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type EtcdNodeAnnouncer struct {
@@ -20,8 +21,11 @@ type EtcdNodeAnnouncer struct {
 var _ port.NodeAnnouncer = (*EtcdNodeAnnouncer)(nil)
 
 type etcdNodeAnnouncement struct {
-	StartupNonce string   `json:"startupNonce"`
-	GRPCURLs     []string `json:"grpcURLs"`
+	NodeID uint32 `json:"nodeID"`
+	Nonce  string `json:"nonce"`
+	GRPC   struct {
+		URLs []string `json:"urls"`
+	} `json:"grpc"`
 }
 
 func NewNodeAnnouncer(client *clientv3.Client, nodeIdentityRepository port.NodeIdentityRepository) port.NodeAnnouncer {
@@ -39,17 +43,20 @@ func (a *EtcdNodeAnnouncer) SetAnnouncement(ctx context.Context, announcement *d
 		return err
 	}
 
-	etcdAnnouncement := etcdNodeAnnouncement{
-		StartupNonce: strconv.FormatUint(announcement.StartupNonce, 10),
-		GRPCURLs:     announcement.GRPCURLs,
+	m := nodev1.Presence{
+		NodeId: uint32(nodeIdentity.NodeID),
+		Nonce:  binary.LittleEndian.AppendUint64(nil, announcement.StartupNonce),
+		Grpc: &nodev1.Presence_GRPCInfo{
+			Urls: announcement.GRPCURLs,
+		},
 	}
 
-	value, err := json.Marshal(&etcdAnnouncement)
+	value, err := protojson.Marshal(&m)
 	if err != nil {
 		return err
 	}
 
-	key := "/mithril/cluster/presence/nodes/" + fmt.Sprintf("%08x", nodeIdentity.NodeID)
+	key := fmt.Sprintf("/live/nodes/%08x", nodeIdentity.NodeID)
 	if err := a.map_.Store(ctx, key, string(value)); err != nil {
 		return err
 	}
@@ -63,7 +70,7 @@ func (a *EtcdNodeAnnouncer) ClearAnnouncement(ctx context.Context) error {
 		return err
 	}
 
-	key := "/mithril/cluster/presence/nodes/" + fmt.Sprintf("%08x", nodeIdentity.NodeID)
+	key := fmt.Sprintf("/live/nodes/%08x", nodeIdentity.NodeID)
 
 	return a.map_.Delete(ctx, key)
 }

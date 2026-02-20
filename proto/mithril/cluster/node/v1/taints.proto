@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package mithril.cluster.node.v1;
+
+option go_package = "github.com/amari/mithril/gen/go/proto/mithril/cluster/node/v1;nodev1";
+
+message Taints {
+  // Denormalized from the etcd key for convenience.
+  uint32 node_id = 1;
+
+  message Taint {
+    string key = 1;
+    string value = 2;
+    Effect effect = 3;
+
+    enum Effect {
+      EFFECT_UNSPECIFIED = 0;
+      EFFECT_NO_SCHEDULE = 1;
+      EFFECT_PREFER_NO_SCHEDULE = 2;
+      EFFECT_NO_EXECUTE = 3;
+    }
+  }
+  repeated Taint taints = 2;
+}

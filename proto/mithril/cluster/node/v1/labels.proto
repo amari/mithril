@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package mithril.cluster.node.v1;
+
+option go_package = "github.com/amari/mithril/gen/go/proto/mithril/cluster/node/v1;nodev1";
+
+message Labels {
+  uint32 node_id = 1;
+
+  message Label {
+    string key = 1;
+    string value = 2;
+  }
+  repeated Label labels = 2;
+}

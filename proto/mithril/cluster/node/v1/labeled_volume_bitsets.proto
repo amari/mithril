@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package mithril.cluster.node.v1;
+
+option go_package = "github.com/amari/mithril/gen/go/proto/mithril/cluster/node/v1;nodev1";
+
+// LabeledVolumeBitsets holds bitsets for set operations on volumes by label.
+message LabeledVolumeBitsets {
+  // Denormalized from the etcd key for convenience.
+  uint32 node_id = 1;
+
+  message LabeledVolumeBitset {
+    string key = 1;
+    string value = 2;
+
+    // Volume ID bitset as little-endian uint64 slice.
+    bytes volume_ids = 3;
+  }
+  repeated LabeledVolumeBitset bitsets = 2;
+}

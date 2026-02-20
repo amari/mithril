@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/amari/mithril/chunk-node/domain"
@@ -33,11 +32,7 @@ func NewIdentityAllocator(client *clientv3.Client) port.NodeIdentityAllocator {
 }
 
 func nodeIdentityKey(nodeID uint32) string {
-	// "/mithril/cluster/nodes/claims/{nodeID}"
-	b := strings.Builder{}
-	b.WriteString("/mithril/cluster/nodes/claims/")
-	b.WriteString(fmt.Sprintf("%08x", uint32(nodeID)))
-	return b.String()
+	return fmt.Sprintf("/claims/%08x", uint32(nodeID))
 }
 
 func (a *IdentityAllocator) AllocateNodeIdentity(ctx context.Context, seed domain.NodeSeed) (*domain.NodeIdentity, error) {
