@@ -65,6 +65,10 @@ func (c *CliFlag) Read() (map[string]any, error) {
 	mp := make(map[string]any)
 	for _, cmd := range lineage {
 		for _, flag := range cmd.Flags {
+			if !flag.IsSet() {
+				continue
+			}
+
 			flagValue := flag.Get()
 
 			for _, flagName := range flag.Names() {
