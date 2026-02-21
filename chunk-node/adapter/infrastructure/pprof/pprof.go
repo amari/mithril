@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
-	"strconv"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -16,7 +15,7 @@ import (
 
 type Config struct {
 	Enabled bool   `koanf:"enabled"`
-	Port    uint16 `koanf:"port"`
+	Address string `koanf:"address"`
 }
 
 func Module(cfg *Config) fx.Option {
@@ -26,12 +25,10 @@ func Module(cfg *Config) fx.Option {
 				return nil
 			}
 
-			port := cfg.Port
-			if port == 0 {
-				port = 6060
+			address := cfg.Address
+			if address == "" {
+				address = "localhost:6060"
 			}
-
-			address := net.JoinHostPort("localhost", strconv.FormatUint(uint64(port), 10))
 
 			mux := http.NewServeMux()
 			mux.HandleFunc("/debug/pprof/", pprof.Index)
