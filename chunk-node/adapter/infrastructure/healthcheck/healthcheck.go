@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/hellofresh/health-go/v5"
@@ -16,7 +15,7 @@ import (
 )
 
 type Config struct {
-	Port uint16 `koanf:"port"`
+	Address string `koanf:"address"`
 }
 
 func Module(cfg *Config) fx.Option {
@@ -39,12 +38,10 @@ func Module(cfg *Config) fx.Option {
 		}, fx.ParamTags(`optional:"true"`))),
 
 		fx.Invoke(func(h *health.Health, log *zerolog.Logger, lc fx.Lifecycle, sd fx.Shutdowner) error {
-			port := cfg.Port
-			if port == 0 {
-				port = 8081
+			address := cfg.Address
+			if address == "" {
+				address = "localhost:8081"
 			}
-
-			address := net.JoinHostPort("::", strconv.FormatUint(uint64(port), 10))
 
 			mux := http.NewServeMux()
 
