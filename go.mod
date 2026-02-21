@@ -8,7 +8,9 @@ require (
 	github.com/amari/fxevent-zerolog v1.0.0
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/cockroachdb/pebble/v2 v2.1.1
+	github.com/creasty/defaults v1.8.0
 	github.com/davecgh/go-spew v1.1.1
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/google/flatbuffers v25.12.19+incompatible
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.2
@@ -68,7 +70,6 @@ require (
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.12.2 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/getsentry/sentry-go v0.27.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect

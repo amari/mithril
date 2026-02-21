@@ -9,7 +9,7 @@ import (
 	samplerlinux "github.com/amari/mithril/chunk-node/adapter/volume/sampler/linux"
 	samplerunix "github.com/amari/mithril/chunk-node/adapter/volume/sampler/unix"
 	"github.com/amari/mithril/chunk-node/domain"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 )
 
 type linuxDirectoryVolumeStatsCollector struct {
@@ -19,7 +19,7 @@ type linuxDirectoryVolumeStatsCollector struct {
 	spaceUtilization *samplerunix.StatfsSpaceUtilizationStatSampler
 }
 
-var _ volume.VolumeStatsCollector = (*linuxDirectoryVolumeStatsCollector)(nil)
+var _ portvolume.VolumeStatsCollector = (*linuxDirectoryVolumeStatsCollector)(nil)
 
 func newDirectoryVolumeStatsCollector(opts DirectoryVolumeStatsCollectorOptions) (*linuxDirectoryVolumeStatsCollector, error) {
 	blockDevice, err := samplerlinux.NewSysfsBlockDeviceStatSamplerWithPath(

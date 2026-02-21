@@ -16,7 +16,7 @@ import (
 
 	"github.com/amari/mithril/chunk-node/domain"
 	linuxpkg "github.com/amari/mithril/chunk-node/linux"
-	"github.com/amari/mithril/chunk-node/port/volume"
+	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 )
 
 // SysfsBlockDeviceStatSamplerOptions contains configuration options for SysfsBlockDeviceStatSampler.
@@ -50,7 +50,7 @@ type SysfsBlockDeviceStatSampler struct {
 	doneCh     chan struct{}
 }
 
-var _ volume.Sampler[*domain.BlockDeviceStats] = (*SysfsBlockDeviceStatSampler)(nil)
+var _ portvolume.Sampler[*domain.BlockDeviceStats] = (*SysfsBlockDeviceStatSampler)(nil)
 
 // NewSysfsBlockDeviceStatSamplerWithPath creates a new sampler for the block device
 // underlying the given filesystem path.

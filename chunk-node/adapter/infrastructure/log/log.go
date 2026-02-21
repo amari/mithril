@@ -8,7 +8,6 @@ import (
 
 	"golang.org/x/term"
 
-	fxeventzerolog "github.com/amari/fxevent-zerolog"
 	"github.com/rs/zerolog"
 	slogzerolog "github.com/samber/slog-zerolog/v2"
 	"go.uber.org/fx"
@@ -69,7 +68,7 @@ func Module(cfg *Config) fx.Option {
 
 		fx.WithLogger(func(logger *zerolog.Logger) fxevent.Logger {
 			log := logger.Level(logger.GetLevel()).With().Str("library.name", "fx").Logger()
-			return fxeventzerolog.New(
+			return NewFXLogger(
 				&log,
 			)
 		}),
