@@ -21,7 +21,7 @@ message Claim {
 
 ### Node Liveness
 
-#### `/live/nodes/:nodeID`
+#### `/alive/nodes/:nodeID`
 
 - Lease-bound
 

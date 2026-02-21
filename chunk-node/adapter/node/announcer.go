@@ -56,7 +56,7 @@ func (a *EtcdNodeAnnouncer) SetAnnouncement(ctx context.Context, announcement *d
 		return err
 	}
 
-	key := fmt.Sprintf("/live/nodes/%08x", nodeIdentity.NodeID)
+	key := fmt.Sprintf("/alive/nodes/%08x", nodeIdentity.NodeID)
 	if err := a.map_.Store(ctx, key, string(value)); err != nil {
 		return err
 	}
