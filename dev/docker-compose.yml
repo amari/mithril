@@ -122,13 +122,13 @@ services:
       - "/usr/local/bin/mithril-chunk-node"
       - "server"
       - "--config-dir"
-      - "/etc/mithril.d"
+      - "/etc/mithril"
       - "--data-dir"
-      - "/var/lib/mithril/chunk-node"
+      - "/var/lib/mithril"
       - "/volume"
     volumes:
-      - ./config:/etc/mithril.d:ro
-      - chunk-node-data:/var/lib/mithril/chunk-node
+      - ./config:/etc/mithril:ro
+      - chunk-node-data:/var/lib/mithril
       - chunk-node-volume:/volume
     ports:
       - 50051:50051
