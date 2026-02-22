@@ -12,16 +12,16 @@ import (
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 )
 
-type darwinDirectoryVolumeStatsCollector struct {
+type darwinDirectoryVolumeStatsProvider struct {
 	volumeID domain.VolumeID
 
 	blockDevice      *samplerdarwin.IOKitBlockDeviceStatSampler
 	spaceUtilization *samplerunix.StatfsSpaceUtilizationStatSampler
 }
 
-var _ portvolume.VolumeStatsCollector = (*darwinDirectoryVolumeStatsCollector)(nil)
+var _ portvolume.VolumeStatsProvider = (*darwinDirectoryVolumeStatsProvider)(nil)
 
-func newDirectoryVolumeStatsCollector(opts DirectoryVolumeStatsCollectorOptions) (*darwinDirectoryVolumeStatsCollector, error) {
+func newDirectoryVolumeStatsProvider(opts DirectoryVolumeStatsProviderOptions) (*darwinDirectoryVolumeStatsProvider, error) {
 	blockDevice, err := samplerdarwin.NewIOKitBlockDeviceStatSamplerWithPath(
 		opts.Path,
 		samplerdarwin.IOKitBlockDeviceStatSamplerOptions{
@@ -43,14 +43,14 @@ func newDirectoryVolumeStatsCollector(opts DirectoryVolumeStatsCollectorOptions)
 		return nil, fmt.Errorf("failed to create space utilization sampler: %w", err)
 	}
 
-	return &darwinDirectoryVolumeStatsCollector{
+	return &darwinDirectoryVolumeStatsProvider{
 		volumeID:         opts.VolumeID,
 		blockDevice:      blockDevice,
 		spaceUtilization: spaceUtilization,
 	}, nil
 }
 
-func (c *darwinDirectoryVolumeStatsCollector) CollectVolumeStats() *domain.VolumeStats {
+func (c *darwinDirectoryVolumeStatsProvider) GetVolumeStats() *domain.VolumeStats {
 	return &domain.VolumeStats{
 		VolumeID:         c.volumeID,
 		BlockDevice:      c.blockDevice.GetSample(),
@@ -58,12 +58,13 @@ func (c *darwinDirectoryVolumeStatsCollector) CollectVolumeStats() *domain.Volum
 	}
 }
 
-func (c *darwinDirectoryVolumeStatsCollector) Close() error {
+func (c *darwinDirectoryVolumeStatsProvider) Stop() error {
 	blockDeviceErr := c.blockDevice.Close()
 	spaceUtilizationErr := c.spaceUtilization.Close()
 
 	if blockDeviceErr != nil {
 		return blockDeviceErr
 	}
+
 	return spaceUtilizationErr
 }

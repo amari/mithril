@@ -6,18 +6,18 @@ import (
 )
 
 type AvailableSpacePickFilter struct {
-	MinFreeSpaceBytes   int64
-	VolumeStatsProvider portvolume.VolumeStatsProvider
+	MinFreeSpaceBytes    int64
+	VolumeIDToStatsIndex portvolume.VolumeIDToStatsIndex
 }
 
 var _ portvolume.VolumeIDPickFilter = (*AvailableSpacePickFilter)(nil)
 
 func (f *AvailableSpacePickFilter) FilterVolumeIDPick(v domain.VolumeID) bool {
-	if f.VolumeStatsProvider == nil {
+	if f.VolumeIDToStatsIndex == nil {
 		return true
 	}
 
-	stats := f.VolumeStatsProvider.GetVolumeStats(v)
+	stats := f.VolumeIDToStatsIndex.GetVolumeStatsByID(v)
 	if stats == nil {
 		return false
 	}

@@ -86,13 +86,13 @@ func GetVolumeCharacteristicsForPath(path string) (*domain.VolumeCharacteristics
 
 	switch strings.ToLower(strings.Trim(string(st.Fstypename[:]), "\x00")) {
 	case "apfs":
-		characteristics.FileSystemType = domain.FileSystemTypeAPFS
+		characteristics.FileSystem = domain.FileSystemTypeAPFS
 	case "hfs":
-		characteristics.FileSystemType = domain.FileSystemTypeHFSPlus
+		characteristics.FileSystem = domain.FileSystemTypeHFSPlus
 	case "ntfs":
-		characteristics.FileSystemType = domain.FileSystemTypeNTFS
+		characteristics.FileSystem = domain.FileSystemTypeNTFS
 	case "zfs":
-		characteristics.FileSystemType = domain.FileSystemTypeZFS
+		characteristics.FileSystem = domain.FileSystemTypeZFS
 	}
 
 	return &characteristics, nil

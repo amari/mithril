@@ -130,13 +130,13 @@ func (m *mockVolumeHealthChecker) CheckVolumeHealth(v domain.VolumeID) *domain.V
 	return &domain.VolumeHealth{State: domain.VolumeStateOK}
 }
 
-type mockVolumeStatsProvider struct {
+type mockVolumeIDToStatsIndex struct {
 	volumeStatsFunc func(volume domain.VolumeID) *domain.VolumeStats
 }
 
-var _ portvolume.VolumeStatsProvider = (*mockVolumeStatsProvider)(nil)
+var _ portvolume.VolumeIDToStatsIndex = (*mockVolumeIDToStatsIndex)(nil)
 
-func (m *mockVolumeStatsProvider) GetVolumeStats(volume domain.VolumeID) *domain.VolumeStats {
+func (m *mockVolumeIDToStatsIndex) GetVolumeStatsByID(volume domain.VolumeID) *domain.VolumeStats {
 	if m.volumeStatsFunc != nil {
 		return m.volumeStatsFunc(volume)
 	}
@@ -285,17 +285,17 @@ type createTestSetup struct {
 
 func newTestHandler(opts ...func(*testHandlerOptions)) *createTestSetup {
 	o := &testHandlerOptions{
-		repo:                &mockChunkRepository{},
-		idGen:               &mockChunkIDGenerator{},
-		volumePicker:        &mockVolumePicker{},
-		nodeIdentityRepo:    &mockNodeIdentityRepository{},
-		volumeHealthChecker: &mockVolumeHealthChecker{},
-		volumeStatsProvider: &mockVolumeStatsProvider{},
-		telemetryProvider:   &mockVolumeTelemetryProvider{},
-		admissionController: &mockVolumeAdmissionController{},
-		chunkStore:          &mockChunkStore{},
-		volumeID:            domain.VolumeID(1),
-		nowFunc:             func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
+		repo:                 &mockChunkRepository{},
+		idGen:                &mockChunkIDGenerator{},
+		volumePicker:         &mockVolumePicker{},
+		nodeIdentityRepo:     &mockNodeIdentityRepository{},
+		volumeHealthChecker:  &mockVolumeHealthChecker{},
+		volumeIDToStatsIndex: &mockVolumeIDToStatsIndex{},
+		telemetryProvider:    &mockVolumeTelemetryProvider{},
+		admissionController:  &mockVolumeAdmissionController{},
+		chunkStore:           &mockChunkStore{},
+		volumeID:             domain.VolumeID(1),
+		nowFunc:              func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
 	}
 
 	for _, opt := range opts {
@@ -314,7 +314,7 @@ func newTestHandler(opts ...func(*testHandlerOptions)) *createTestSetup {
 		NowFunc:                   o.nowFunc,
 		NodeIdentityRepository:    o.nodeIdentityRepo,
 		VolumeHealthChecker:       o.volumeHealthChecker,
-		VolumeStatsProvider:       o.volumeStatsProvider,
+		VolumeIDToStatsIndex:      o.volumeIDToStatsIndex,
 		VolumeTelemetryProvider:   o.telemetryProvider,
 	}
 
@@ -329,17 +329,17 @@ func newTestHandler(opts ...func(*testHandlerOptions)) *createTestSetup {
 }
 
 type testHandlerOptions struct {
-	repo                *mockChunkRepository
-	idGen               *mockChunkIDGenerator
-	volumePicker        *mockVolumePicker
-	nodeIdentityRepo    *mockNodeIdentityRepository
-	volumeHealthChecker *mockVolumeHealthChecker
-	volumeStatsProvider *mockVolumeStatsProvider
-	telemetryProvider   *mockVolumeTelemetryProvider
-	admissionController *mockVolumeAdmissionController
-	chunkStore          *mockChunkStore
-	volumeID            domain.VolumeID
-	nowFunc             func() time.Time
+	repo                 *mockChunkRepository
+	idGen                *mockChunkIDGenerator
+	volumePicker         *mockVolumePicker
+	nodeIdentityRepo     *mockNodeIdentityRepository
+	volumeHealthChecker  *mockVolumeHealthChecker
+	volumeIDToStatsIndex *mockVolumeIDToStatsIndex
+	telemetryProvider    *mockVolumeTelemetryProvider
+	admissionController  *mockVolumeAdmissionController
+	chunkStore           *mockChunkStore
+	volumeID             domain.VolumeID
+	nowFunc              func() time.Time
 }
 
 func withRepo(repo *mockChunkRepository) func(*testHandlerOptions) {

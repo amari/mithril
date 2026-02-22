@@ -3,9 +3,12 @@ package volume
 import (
 	"context"
 	"errors"
+	"maps"
 	"strings"
 	"time"
 
+	adaptervolumecharacteristics "github.com/amari/mithril/chunk-node/adapter/volume/characteristics"
+	"github.com/amari/mithril/chunk-node/adapter/volume/directory"
 	volumedirectorystatscollector "github.com/amari/mithril/chunk-node/adapter/volume/directory/statscollector"
 	"github.com/amari/mithril/chunk-node/domain"
 	"github.com/amari/mithril/chunk-node/port"
@@ -25,22 +28,23 @@ type VolumeService struct {
 
 	log *zerolog.Logger
 
-	characteristics map[domain.VolumeID]*domain.VolumeCharacteristics
-	attributes      map[domain.VolumeID][]attribute.KeyValue
-	labels          map[domain.VolumeID]map[string]string
-	labelIndex      map[string]map[string][]domain.VolumeID
-	labelIDSets     map[string]map[string]*domain.VolumeIDSet
-	loggerFields    map[domain.VolumeID][]any
-	stats           map[domain.VolumeID]portvolume.VolumeStatsCollector
+	characteristicsProviders map[domain.VolumeID]portvolume.VolumeCharacteristicsProvider
+	attributes               map[domain.VolumeID][]attribute.KeyValue
+	labels                   map[domain.VolumeID]map[string]string
+	labelProviders           map[domain.VolumeID][]portvolume.VolumeLabelProvider
+	labelIndex               map[string]map[string][]domain.VolumeID
+	labelIDSets              map[string]map[string]*domain.VolumeIDSet
+	loggerFields             map[domain.VolumeID][]any
+	stats                    map[domain.VolumeID]portvolume.VolumeStatsProvider
 
 	labelIndexPublisher portvolume.VolumeIDSetLabelIndexesPublisher
 }
 
 var (
-	_ portvolume.VolumeCharacteristicsProvider = (*VolumeService)(nil)
-	_ portvolume.VolumeLabelToIDsIndex         = (*VolumeService)(nil)
-	_ portvolume.VolumeLabelToIDSetIndex       = (*VolumeService)(nil)
-	_ portvolume.VolumeTelemetryProvider       = (*VolumeService)(nil)
+	_ portvolume.VolumeIDToCharacteristicsIndex = (*VolumeService)(nil)
+	_ portvolume.VolumeLabelToIDsIndex          = (*VolumeService)(nil)
+	_ portvolume.VolumeLabelToIDSetIndex        = (*VolumeService)(nil)
+	_ portvolume.VolumeTelemetryProvider        = (*VolumeService)(nil)
 )
 
 func NewVolumeService(
@@ -60,13 +64,14 @@ func NewVolumeService(
 		picker:           picker,
 		log:              log,
 
-		characteristics: make(map[domain.VolumeID]*domain.VolumeCharacteristics),
-		attributes:      make(map[domain.VolumeID][]attribute.KeyValue),
-		labels:          make(map[domain.VolumeID]map[string]string),
-		labelIndex:      make(map[string]map[string][]domain.VolumeID),
-		labelIDSets:     make(map[string]map[string]*domain.VolumeIDSet),
-		loggerFields:    make(map[domain.VolumeID][]any),
-		stats:           make(map[domain.VolumeID]portvolume.VolumeStatsCollector),
+		characteristicsProviders: make(map[domain.VolumeID]portvolume.VolumeCharacteristicsProvider),
+		attributes:               make(map[domain.VolumeID][]attribute.KeyValue),
+		labels:                   make(map[domain.VolumeID]map[string]string),
+		labelProviders:           make(map[domain.VolumeID][]portvolume.VolumeLabelProvider),
+		labelIndex:               make(map[string]map[string][]domain.VolumeID),
+		labelIDSets:              make(map[string]map[string]*domain.VolumeIDSet),
+		loggerFields:             make(map[domain.VolumeID][]any),
+		stats:                    make(map[domain.VolumeID]portvolume.VolumeStatsProvider),
 
 		labelIndexPublisher: labelIndexPublisher,
 	}
@@ -102,16 +107,17 @@ func (s *VolumeService) AddDirectoryVolume(ctx context.Context, path string, for
 
 	volumeID := vol.ID()
 
-	// Collect characteristics - required for volume operation
-	characteristics, err := GetVolumeCharacteristicsForPath(path)
+	// Create and store volume characteristics provider
+	characteristicsProvider, err := directory.NewCharacteristicsProvider(path)
 	if err != nil {
 		vol.Close()
+
 		return err
 	}
-	s.characteristics[volumeID] = characteristics
+	s.characteristicsProviders[volumeID] = characteristicsProvider
 
 	// Collect attributes and logger fields
-	attributes := buildVolumeAttributes(characteristics)
+	attributes := buildVolumeAttributes(characteristicsProvider.GetVolumeCharacteristics())
 	attributes = append(attributes,
 		attribute.Int64("volume.id", int64(volumeID)),
 		attribute.String("volume.path", path),
@@ -120,7 +126,17 @@ func (s *VolumeService) AddDirectoryVolume(ctx context.Context, path string, for
 	s.loggerFields[volumeID] = buildVolumeLoggerFieldsWithAttributes(attributes)
 
 	// Collect labels and update indexes
-	labels := buildVolumeLabels(characteristics)
+	labelProviders := []portvolume.VolumeLabelProvider{
+		adaptervolumecharacteristics.NewLabelProvider(characteristicsProvider.GetVolumeCharacteristics()),
+	}
+	s.labelProviders[volumeID] = labelProviders
+
+	labels := map[string]string{}
+	for _, provider := range labelProviders {
+		// TODO: watch every label provider
+
+		maps.Copy(labels, provider.GetVolumeLabels())
+	}
 	s.labels[volumeID] = labels
 
 	for key, value := range labels {
@@ -152,10 +168,10 @@ func (s *VolumeService) AddDirectoryVolume(ctx context.Context, path string, for
 	}
 
 	// Start stats collecting
-	if statsCollector, err := volumedirectorystatscollector.NewDirectoryVolumeStatsCollector(volumedirectorystatscollector.DirectoryVolumeStatsCollectorOptions{
+	if statsCollector, err := volumedirectorystatscollector.NewDirectoryVolumeStatsProvider(volumedirectorystatscollector.DirectoryVolumeStatsProviderOptions{
 		VolumeID:     volumeID,
 		Path:         path,
-		PollInterval: 10 * time.Second, // TODO: make configurable
+		PollInterval: 1 * time.Second, // TODO: make configurable
 	}); err != nil {
 		vol.Close()
 		return err
@@ -193,8 +209,10 @@ func (s *VolumeService) CloseAllVolumes(ctx context.Context) error {
 
 		// Stop collecting stats
 		if collector, ok := s.stats[id]; ok {
-			if err := collector.Close(); err != nil {
-				errs = append(errs, err)
+			if stopper, ok := collector.(interface{ Stop() error }); ok {
+				if err := stopper.Stop(); err != nil {
+					errs = append(errs, err)
+				}
 			}
 
 			delete(s.stats, id)
@@ -227,11 +245,14 @@ func (s *VolumeService) RecordOperationSuccess(ctx context.Context, volumeID dom
 	//s.healthTracker.RecordSuccess(ctx, volumeID)
 }
 
-// GetVolumeCharacteristics implements VolumeCharacteristicsProvider.
-func (s *VolumeService) GetVolumeCharacteristics(id domain.VolumeID) (*domain.VolumeCharacteristics, bool) {
-	characteristics, ok := s.characteristics[id]
+// GetVolumeCharacteristicsByID implements VolumeIDToCharacteristicsIndex.
+func (s *VolumeService) GetVolumeCharacteristicsByID(id domain.VolumeID) *domain.VolumeCharacteristics {
+	characteristics, ok := s.characteristicsProviders[id]
+	if !ok {
+		return nil
+	}
 
-	return characteristics, ok
+	return characteristics.GetVolumeCharacteristics()
 }
 
 // GetVolumeAttributes implements VolumeTelemetryProvider.
@@ -292,12 +313,12 @@ func (s *VolumeService) GetAllVolumeIDSets() map[string]map[string]*domain.Volum
 	return s.labelIDSets
 }
 
-// GetVolumeStats implements VolumeStatsProvider.
-func (s *VolumeService) GetVolumeStats(id domain.VolumeID) *domain.VolumeStats {
+// GetVolumeStats implements VolumeIDToStatsIndex.
+func (s *VolumeService) GetVolumeStatsByID(id domain.VolumeID) *domain.VolumeStats {
 	statsCollector, ok := s.stats[id]
 
 	if !ok {
-		return statsCollector.CollectVolumeStats()
+		return statsCollector.GetVolumeStats()
 	}
 
 	return nil
@@ -356,70 +377,11 @@ func buildVolumeAttributes(characteristics *domain.VolumeCharacteristics) []attr
 		attributes = append(attributes, attribute.String("device.protocol", string(characteristics.Protocol)))
 	}
 
-	if characteristics.FileSystemType != "" {
-		attributes = append(attributes, attribute.String("device.filesystem", strings.ToLower(characteristics.FileSystemType.String())))
+	if characteristics.FileSystem != "" {
+		attributes = append(attributes, attribute.String("device.filesystem", strings.ToLower(characteristics.FileSystem.String())))
 	}
 
 	return attributes
-}
-
-func buildVolumeLabels(characteristics *domain.VolumeCharacteristics) map[string]string {
-	if characteristics == nil {
-		return nil
-	}
-
-	labels := make(map[string]string)
-
-	// Medium labels
-	switch characteristics.Medium {
-	case domain.MediumTypeRotational:
-		labels["hdd"] = "true"
-	case domain.MediumTypeSolidState:
-		labels["ssd"] = "true"
-	}
-
-	// Protocol labels
-	switch characteristics.Protocol {
-	case domain.ProtocolTypeNVMe:
-		labels["nvme"] = "true"
-	case domain.ProtocolTypeSCSI:
-		labels["scsi"] = "true"
-	case domain.ProtocolTypeATA:
-		labels["ata"] = "true"
-	}
-
-	// Interconnect labels
-	switch characteristics.Interconnect {
-	case domain.InterconnectTypeFibreChannel:
-		labels["fibre-channel"] = "true"
-	case domain.InterconnectTypeFireWire:
-		labels["firewire"] = "true"
-	case domain.InterconnectTypeInfiniBand:
-		labels["infiniband"] = "true"
-	case domain.InterconnectTypePATA:
-		labels["pata"] = "true"
-	case domain.InterconnectTypePCIExpress:
-		labels["pcie"] = "true"
-	case domain.InterconnectTypeRDMA:
-		labels["rdma"] = "true"
-	case domain.InterconnectTypeSAS:
-		labels["sas"] = "true"
-	case domain.InterconnectTypeSATA:
-		labels["sata"] = "true"
-	case domain.InterconnectTypeTCP:
-		labels["tcp"] = "true"
-	case domain.InterconnectTypeUSB:
-		labels["usb"] = "true"
-	case domain.InterconnectTypeVirtIO:
-		labels["virtio"] = "true"
-	}
-
-	// Filesystem labels
-	if characteristics.FileSystemType != "" {
-		labels[strings.ToLower(characteristics.FileSystemType.String())] = "true"
-	}
-
-	return labels
 }
 
 func buildVolumeLoggerFieldsWithAttributes(attributes []attribute.KeyValue) []any {

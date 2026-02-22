@@ -28,17 +28,17 @@ type putTestSetup struct {
 
 func newPutTestHandler(opts ...func(*putTestOptions)) *putTestSetup {
 	o := &putTestOptions{
-		repo:                &mockChunkRepository{},
-		idGen:               &mockChunkIDGenerator{},
-		volumePicker:        &mockVolumePicker{},
-		nodeIdentityRepo:    &mockNodeIdentityRepository{},
-		volumeHealthChecker: &mockVolumeHealthChecker{},
-		volumeStatsProvider: &mockVolumeStatsProvider{},
-		telemetryProvider:   &mockVolumeTelemetryProvider{},
-		admissionController: &mockVolumeAdmissionController{},
-		chunkStore:          &mockChunkStore{},
-		volumeID:            domain.VolumeID(1),
-		nowFunc:             func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
+		repo:                 &mockChunkRepository{},
+		idGen:                &mockChunkIDGenerator{},
+		volumePicker:         &mockVolumePicker{},
+		nodeIdentityRepo:     &mockNodeIdentityRepository{},
+		volumeHealthChecker:  &mockVolumeHealthChecker{},
+		volumeIDToStatsIndex: &mockVolumeIDToStatsIndex{},
+		telemetryProvider:    &mockVolumeTelemetryProvider{},
+		admissionController:  &mockVolumeAdmissionController{},
+		chunkStore:           &mockChunkStore{},
+		volumeID:             domain.VolumeID(1),
+		nowFunc:              func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) },
 	}
 
 	for _, opt := range opts {
@@ -57,7 +57,7 @@ func newPutTestHandler(opts ...func(*putTestOptions)) *putTestSetup {
 		NowFunc:                   o.nowFunc,
 		NodeIdentityRepository:    o.nodeIdentityRepo,
 		VolumeHealthChecker:       o.volumeHealthChecker,
-		VolumeStatsProvider:       o.volumeStatsProvider,
+		VolumeIDToStatsIndex:      o.volumeIDToStatsIndex,
 		VolumeTelemetryProvider:   o.telemetryProvider,
 	}
 
@@ -72,17 +72,17 @@ func newPutTestHandler(opts ...func(*putTestOptions)) *putTestSetup {
 }
 
 type putTestOptions struct {
-	repo                *mockChunkRepository
-	idGen               *mockChunkIDGenerator
-	volumePicker        *mockVolumePicker
-	nodeIdentityRepo    *mockNodeIdentityRepository
-	volumeHealthChecker *mockVolumeHealthChecker
-	volumeStatsProvider *mockVolumeStatsProvider
-	telemetryProvider   *mockVolumeTelemetryProvider
-	admissionController *mockVolumeAdmissionController
-	chunkStore          *mockChunkStore
-	volumeID            domain.VolumeID
-	nowFunc             func() time.Time
+	repo                 *mockChunkRepository
+	idGen                *mockChunkIDGenerator
+	volumePicker         *mockVolumePicker
+	nodeIdentityRepo     *mockNodeIdentityRepository
+	volumeHealthChecker  *mockVolumeHealthChecker
+	volumeIDToStatsIndex *mockVolumeIDToStatsIndex
+	telemetryProvider    *mockVolumeTelemetryProvider
+	admissionController  *mockVolumeAdmissionController
+	chunkStore           *mockChunkStore
+	volumeID             domain.VolumeID
+	nowFunc              func() time.Time
 }
 
 func putWithRepo(repo *mockChunkRepository) func(*putTestOptions) {
@@ -105,8 +105,8 @@ func putWithHealthChecker(checker *mockVolumeHealthChecker) func(*putTestOptions
 	return func(o *putTestOptions) { o.volumeHealthChecker = checker }
 }
 
-func putWithVolumeStatsProvider(provider *mockVolumeStatsProvider) func(*putTestOptions) {
-	return func(o *putTestOptions) { o.volumeStatsProvider = provider }
+func putWithVolumeIDToStatsIndex(index *mockVolumeIDToStatsIndex) func(*putTestOptions) {
+	return func(o *putTestOptions) { o.volumeIDToStatsIndex = index }
 }
 
 func putWithTelemetryProvider(provider *mockVolumeTelemetryProvider) func(*putTestOptions) {

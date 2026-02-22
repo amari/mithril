@@ -35,7 +35,7 @@ type CreateChunkHandler struct {
 	NowFunc                   func() time.Time
 	NodeIdentityRepository    port.NodeIdentityRepository
 	VolumeHealthChecker       portvolume.VolumeHealthChecker
-	VolumeStatsProvider       portvolume.VolumeStatsProvider
+	VolumeIDToStatsIndex      portvolume.VolumeIDToStatsIndex
 	VolumeTelemetryProvider   portvolume.VolumeTelemetryProvider
 }
 
@@ -47,7 +47,7 @@ func NewCreateChunkHandler(
 	volumePicker portvolume.VolumePicker,
 	nodeIdentityRepository port.NodeIdentityRepository,
 	volumeHealthChecker portvolume.VolumeHealthChecker,
-	volumeStatsProvider portvolume.VolumeStatsProvider,
+	volumeIDToStatsIndex portvolume.VolumeIDToStatsIndex,
 	volumeTelemetryProvider portvolume.VolumeTelemetryProvider,
 ) *CreateChunkHandler {
 	return &CreateChunkHandler{
@@ -59,7 +59,7 @@ func NewCreateChunkHandler(
 		NowFunc:                   time.Now,
 		NodeIdentityRepository:    nodeIdentityRepository,
 		VolumeHealthChecker:       volumeHealthChecker,
-		VolumeStatsProvider:       volumeStatsProvider,
+		VolumeIDToStatsIndex:      volumeIDToStatsIndex,
 		VolumeTelemetryProvider:   volumeTelemetryProvider,
 	}
 }
@@ -186,8 +186,8 @@ func (h *CreateChunkHandler) createFreshChunk(
 				HealthChecker: h.VolumeHealthChecker,
 			},
 			&picker.AvailableSpacePickFilter{
-				MinFreeSpaceBytes:   max(0, input.MinTailSlackSize),
-				VolumeStatsProvider: h.VolumeStatsProvider,
+				MinFreeSpaceBytes:    max(0, input.MinTailSlackSize),
+				VolumeIDToStatsIndex: h.VolumeIDToStatsIndex,
 			},
 		),
 	})

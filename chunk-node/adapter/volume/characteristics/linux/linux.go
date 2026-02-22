@@ -82,15 +82,15 @@ func GetVolumeCharacteristicsForPath(path string) (*domain.VolumeCharacteristics
 
 	switch st.Type {
 	case BTRFS_SUPER_MAGIC:
-		characteristics.FileSystemType = domain.FileSystemTypeBtrfs
+		characteristics.FileSystem = domain.FileSystemTypeBtrfs
 	case EXT4_SUPER_MAGIC:
-		characteristics.FileSystemType = domain.FileSystemTypeExt4
+		characteristics.FileSystem = domain.FileSystemTypeExt4
 	case NTFS_SUPER_MAGIC:
-		characteristics.FileSystemType = domain.FileSystemTypeNTFS
+		characteristics.FileSystem = domain.FileSystemTypeNTFS
 	case XFS_SUPER_MAGIC:
-		characteristics.FileSystemType = domain.FileSystemTypeXFS
+		characteristics.FileSystem = domain.FileSystemTypeXFS
 	case ZFS_SUPER_MAGIC:
-		characteristics.FileSystemType = domain.FileSystemTypeZFS
+		characteristics.FileSystem = domain.FileSystemTypeZFS
 	}
 
 	return &characteristics, nil

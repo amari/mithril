@@ -38,14 +38,14 @@ type VolumeHealth struct {
 // sysfs on Linux) and normalized into a unified representation for labeling and
 // observability purposes.
 type VolumeCharacteristics struct {
-	DeviceName     string
-	Medium         MediumType
-	Interconnect   InterconnectType
-	Protocol       ProtocolType
-	Vendor         string
-	Model          string
-	SerialNumber   string
-	FileSystemType FileSystemType
+	DeviceName   string
+	Medium       MediumType
+	Interconnect InterconnectType
+	Protocol     ProtocolType
+	Vendor       string
+	Model        string
+	SerialNumber string
+	FileSystem   FileSystemType
 }
 
 // MediumType describes the physical storage medium.

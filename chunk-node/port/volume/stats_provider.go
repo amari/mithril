@@ -6,5 +6,9 @@ import (
 
 // VolumeStatsProvider provides statistics for a given volume.
 type VolumeStatsProvider interface {
-	GetVolumeStats(id ID) *domain.VolumeStats
+	GetVolumeStats() *domain.VolumeStats
+}
+
+type VolumeIDToStatsIndex interface {
+	GetVolumeStatsByID(id domain.VolumeID) *domain.VolumeStats
 }

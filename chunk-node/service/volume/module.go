@@ -42,7 +42,7 @@ func Module(directoryVolumePaths []string) fx.Option {
 			func(m *VolumeManager) portvolume.VolumeProvider {
 				return m
 			},
-			func(svc *VolumeService) portvolume.VolumeCharacteristicsProvider {
+			func(svc *VolumeService) portvolume.VolumeIDToCharacteristicsIndex {
 				return svc
 			},
 			func(svc *VolumeService) portvolume.VolumeHealthChecker {
@@ -51,7 +51,7 @@ func Module(directoryVolumePaths []string) fx.Option {
 			func(svc *VolumeService) portvolume.VolumeHealthProvider {
 				return svc
 			},
-			func(svc *VolumeService) portvolume.VolumeStatsProvider {
+			func(svc *VolumeService) portvolume.VolumeIDToStatsIndex {
 				return svc
 			},
 			func(svc *VolumeService) portvolume.VolumeTelemetryProvider {

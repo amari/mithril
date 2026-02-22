@@ -7,13 +7,13 @@ import (
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
 )
 
-type DirectoryVolumeStatsCollectorOptions struct {
+type DirectoryVolumeStatsProviderOptions struct {
 	VolumeID domain.VolumeID
 	Path     string
 
 	PollInterval time.Duration
 }
 
-func NewDirectoryVolumeStatsCollector(opts DirectoryVolumeStatsCollectorOptions) (portvolume.VolumeStatsCollector, error) {
-	return newDirectoryVolumeStatsCollector(opts)
+func NewDirectoryVolumeStatsProvider(opts DirectoryVolumeStatsProviderOptions) (portvolume.VolumeStatsProvider, error) {
+	return newDirectoryVolumeStatsProvider(opts)
 }
