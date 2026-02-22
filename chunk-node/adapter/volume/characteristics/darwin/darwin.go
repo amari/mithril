@@ -46,6 +46,7 @@ import (
 
 	iokit "github.com/amari/mithril/chunk-node/darwin"
 	"github.com/amari/mithril/chunk-node/domain"
+	"github.com/amari/mithril/chunk-node/unix"
 )
 
 // GetVolumeCharacteristicsForPath returns the volume characteristics for the given filesystem path.
@@ -75,6 +76,23 @@ func GetVolumeCharacteristicsForPath(path string) (*domain.VolumeCharacteristics
 	// Detect interconnect and protocol
 	if err := detectInterconnectAndProtocol(media, protocolChars, &characteristics); err != nil {
 		return nil, err
+	}
+
+	// Detect filesystem
+	st, err := unix.Statfs(path)
+	if err != nil {
+		return nil, err
+	}
+
+	switch strings.ToLower(strings.Trim(string(st.Fstypename[:]), "\x00")) {
+	case "apfs":
+		characteristics.FileSystemType = domain.FileSystemTypeAPFS
+	case "hfs":
+		characteristics.FileSystemType = domain.FileSystemTypeHFSPlus
+	case "ntfs":
+		characteristics.FileSystemType = domain.FileSystemTypeNTFS
+	case "zfs":
+		characteristics.FileSystemType = domain.FileSystemTypeZFS
 	}
 
 	return &characteristics, nil

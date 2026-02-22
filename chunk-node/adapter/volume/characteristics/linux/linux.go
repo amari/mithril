@@ -54,6 +54,7 @@ import (
 
 	"github.com/amari/mithril/chunk-node/domain"
 	linuxpkg "github.com/amari/mithril/chunk-node/linux"
+	"github.com/amari/mithril/chunk-node/unix"
 )
 
 // GetVolumeCharacteristicsForPath returns the volume characteristics for the given filesystem path.
@@ -73,8 +74,36 @@ func GetVolumeCharacteristicsForPath(path string) (*domain.VolumeCharacteristics
 	readDeviceAttributes(blockDevice, &characteristics)
 	detectInterconnectAndProtocol(blockDevice, &characteristics)
 
+	// Detect filesystem
+	st, err := unix.Statfs(path)
+	if err != nil {
+		return nil, err
+	}
+
+	switch st.Type {
+	case BTRFS_SUPER_MAGIC:
+		characteristics.FileSystemType = domain.FileSystemTypeBtrfs
+	case EXT4_SUPER_MAGIC:
+		characteristics.FileSystemType = domain.FileSystemTypeExt4
+	case NTFS_SUPER_MAGIC:
+		characteristics.FileSystemType = domain.FileSystemTypeNTFS
+	case XFS_SUPER_MAGIC:
+		characteristics.FileSystemType = domain.FileSystemTypeXFS
+	case ZFS_SUPER_MAGIC:
+		characteristics.FileSystemType = domain.FileSystemTypeZFS
+	}
+
 	return &characteristics, nil
 }
+
+// Filesystem magic numbers from <linux/magic.h>
+const (
+	BTRFS_SUPER_MAGIC = 0x9123683E
+	EXT4_SUPER_MAGIC  = 0xEF53
+	NTFS_SUPER_MAGIC  = 0x5346544E // note: fs/ntfs/super.c and fs/ntfs3/super.c define this
+	XFS_SUPER_MAGIC   = 0x58465342
+	ZFS_SUPER_MAGIC   = 0x2FC12FC1 // note: ZFS-on-Linux defines this
+)
 
 // readDeviceAttributes reads model, vendor, serial, and medium type from sysfs.
 func readDeviceAttributes(blockDevice *linuxpkg.BlockDevice, characteristics *domain.VolumeCharacteristics) {

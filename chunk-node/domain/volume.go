@@ -38,14 +38,14 @@ type VolumeHealth struct {
 // sysfs on Linux) and normalized into a unified representation for labeling and
 // observability purposes.
 type VolumeCharacteristics struct {
-	DeviceName   string
-	Medium       MediumType
-	Interconnect InterconnectType
-	Protocol     ProtocolType
-	Vendor       string
-	Model        string
-	SerialNumber string
-	// TODO: filesystem type (APFS, XFS, etc.)
+	DeviceName     string
+	Medium         MediumType
+	Interconnect   InterconnectType
+	Protocol       ProtocolType
+	Vendor         string
+	Model          string
+	SerialNumber   string
+	FileSystemType FileSystemType
 }
 
 // MediumType describes the physical storage medium.
@@ -102,6 +102,43 @@ const (
 	// ProtocolTypeNVMe indicates the NVMe command set.
 	ProtocolTypeNVMe ProtocolType = "nvme"
 )
+
+type FileSystemType string
+
+const (
+	FileSystemTypeUnknown FileSystemType = ""
+	FileSystemTypeAPFS    FileSystemType = "apfs"
+	FileSystemTypeBtrfs   FileSystemType = "btrfs"
+	FileSystemTypeExt4    FileSystemType = "ext4"
+	FileSystemTypeHFSPlus FileSystemType = "hfs+"
+	FileSystemTypeNTFS    FileSystemType = "ntfs"
+	FileSystemTypeReFS    FileSystemType = "refs"
+	FileSystemTypeXFS     FileSystemType = "xfs"
+	FileSystemTypeZFS     FileSystemType = "zfs"
+)
+
+func (fs FileSystemType) String() string {
+	switch fs {
+	case FileSystemTypeAPFS:
+		return "APFS"
+	case FileSystemTypeBtrfs:
+		return "Btrfs"
+	case FileSystemTypeExt4:
+		return "Ext4"
+	case FileSystemTypeHFSPlus:
+		return "HFS+"
+	case FileSystemTypeNTFS:
+		return "NTFS"
+	case FileSystemTypeReFS:
+		return "ReFS"
+	case FileSystemTypeXFS:
+		return "XFS"
+	case FileSystemTypeZFS:
+		return "ZFS"
+	default:
+		return "Unknown"
+	}
+}
 
 type VolumeIDSet struct {
 	words []uint64

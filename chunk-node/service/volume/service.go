@@ -3,6 +3,7 @@ package volume
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	volumedirectorystatscollector "github.com/amari/mithril/chunk-node/adapter/volume/directory/statscollector"
@@ -355,6 +356,10 @@ func buildVolumeAttributes(characteristics *domain.VolumeCharacteristics) []attr
 		attributes = append(attributes, attribute.String("device.protocol", string(characteristics.Protocol)))
 	}
 
+	if characteristics.FileSystemType != "" {
+		attributes = append(attributes, attribute.String("device.filesystem", strings.ToLower(characteristics.FileSystemType.String())))
+	}
+
 	return attributes
 }
 
@@ -407,6 +412,11 @@ func buildVolumeLabels(characteristics *domain.VolumeCharacteristics) map[string
 		labels["usb"] = "true"
 	case domain.InterconnectTypeVirtIO:
 		labels["virtio"] = "true"
+	}
+
+	// Filesystem labels
+	if characteristics.FileSystemType != "" {
+		labels[strings.ToLower(characteristics.FileSystemType.String())] = "true"
 	}
 
 	return labels
