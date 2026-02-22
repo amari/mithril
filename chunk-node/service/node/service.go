@@ -3,82 +3,88 @@ package node
 import (
 	"context"
 	"maps"
+	"sync"
 
-	adapternodelabeler "github.com/amari/mithril/chunk-node/adapter/node/labelcollector"
 	portnode "github.com/amari/mithril/chunk-node/port/node"
 	"github.com/rs/zerolog"
+	"go.uber.org/fx"
 )
 
 type LabelService struct {
-	labelPublisher               portnode.NodeLabelPublisher
-	runtimeLabelCollector        portnode.NodeLabelCollector
-	kubernetesPodLabelCollector  portnode.NodeLabelCollector
-	kubernetesNodeLabelCollector portnode.NodeLabelCollector
-	log                          *zerolog.Logger
+	labelPublisher portnode.NodeLabelPublisher
+	log            *zerolog.Logger
+
+	labelProviders []portnode.NodeLabelProvider
+
+	watchCtx        context.Context
+	watchCancelFunc context.CancelFunc
+	wg              sync.WaitGroup
+}
+
+type LabelServiceParams struct {
+	fx.In
+
+	LabelPublisher portnode.NodeLabelPublisher
+	LabelProviders []portnode.NodeLabelProvider `group:"node-label-provider"`
+	Logger         *zerolog.Logger
 }
 
 func NewLabelService(
-	labelPublisher portnode.NodeLabelPublisher,
-	runtimeLabelCollector *adapternodelabeler.Runtime,
-	kubernetesPodLabelCollector *adapternodelabeler.KubernetesPod,
-	kubernetesNodeLabelCollector *adapternodelabeler.KubernetesNode,
-	log *zerolog.Logger,
+	params LabelServiceParams,
 ) *LabelService {
 	return &LabelService{
-		labelPublisher:        labelPublisher,
-		runtimeLabelCollector: runtimeLabelCollector,
-		kubernetesPodLabelCollector: adapternodelabeler.First(
-			adapternodelabeler.Backoff(
-				kubernetesPodLabelCollector,
-				adapternodelabeler.BackoffOptions{},
-			),
-		),
-		kubernetesNodeLabelCollector: adapternodelabeler.Debounce(
-			adapternodelabeler.Backoff(
-				kubernetesNodeLabelCollector,
-				adapternodelabeler.BackoffOptions{},
-			),
-			adapternodelabeler.DebounceOptions{},
-		),
-		log: log,
+		labelProviders: params.LabelProviders,
+		labelPublisher: params.LabelPublisher,
+		log:            params.Logger,
 	}
 }
 
 func (s *LabelService) Start(ctx context.Context) error {
-	// TODO: watch each collector
+	watchCtx, cancelF := context.WithCancel(context.Background())
+
+	s.watchCtx = watchCtx
+	s.watchCancelFunc = cancelF
+
+	for _, provider := range s.labelProviders {
+		if provider == nil {
+			continue
+		}
+
+		s.wg.Go(func() {
+			ch := provider.Watch(watchCtx)
+
+			select {
+			case <-ch:
+				if err := s.publishLabels(); err != nil {
+					s.log.Error().Err(err).Msg("failed to publish labels")
+				}
+			case <-watchCtx.Done():
+				return
+			}
+		})
+	}
 
 	return nil
 }
 
 func (s *LabelService) Stop(ctx context.Context) error {
+	s.watchCancelFunc()
+
+	s.wg.Wait()
+
 	return nil
 }
 
-func (s *LabelService) publishLabels(ctx context.Context) error {
+func (s *LabelService) publishLabels() error {
 	labels := make(map[string]string)
 
-	// Collect from runtime
-	runtimeLabels, err := s.runtimeLabelCollector.CollectNodeLabels(ctx)
-	if err != nil {
-		s.log.Error().Err(err).Msg("failed to collect runtime labels")
-	} else {
-		maps.Copy(labels, runtimeLabels)
-	}
+	for _, provider := range s.labelProviders {
+		if provider == nil {
+			continue
+		}
 
-	// Collect from Kubernetes pods
-	podLabels, err := s.kubernetesPodLabelCollector.CollectNodeLabels(ctx)
-	if err != nil {
-		s.log.Error().Err(err).Msg("failed to collect Kubernetes pod labels")
-	} else {
-		maps.Copy(labels, podLabels)
-	}
-
-	// Collect from Kubernetes node
-	nodeLabels, err := s.kubernetesNodeLabelCollector.CollectNodeLabels(ctx)
-	if err != nil {
-		s.log.Error().Err(err).Msg("failed to collect Kubernetes node labels")
-	} else {
-		maps.Copy(labels, nodeLabels)
+		providerLabels := provider.GetNodeLabels()
+		maps.Copy(labels, providerLabels)
 	}
 
 	return s.labelPublisher.PublishNodeLabels(labels)

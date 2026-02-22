@@ -3,7 +3,6 @@ package adapternode
 import (
 	"path/filepath"
 
-	adapternodelabeler "github.com/amari/mithril/chunk-node/adapter/node/labelcollector"
 	"github.com/amari/mithril/chunk-node/port"
 	portnode "github.com/amari/mithril/chunk-node/port/node"
 	portvolume "github.com/amari/mithril/chunk-node/port/volume"
@@ -48,6 +47,13 @@ func Module(cfg *Config, dataDir string) fx.Option {
 				return f
 			},
 		),
-		adapternodelabeler.Module(cfg.Labels),
+		fx.Provide(NewKubernetesLabelProvider),
+		fx.Provide(fx.Annotate(func(p *KubernetesLabelProvider) portnode.NodeLabelProvider {
+			return p
+		}, fx.ResultTags(`group:"node-label-provider"`))),
+		fx.Invoke(func(p *KubernetesLabelProvider, lc fx.Lifecycle) {
+			lc.Append(fx.StartStopHook(p.Start, p.Stop))
+		}),
+		fx.Provide(fx.Annotate(NewRuntimeLabelProvider, fx.ResultTags(`group:"node-label-provider"`))),
 	)
 }

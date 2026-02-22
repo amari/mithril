@@ -11,14 +11,8 @@ import (
 func Module(grpcURLs []string) fx.Option {
 	return fx.Module("service.node",
 		fx.Provide(NewNodeIdentityService),
-		fx.Provide(NewNodeLabelService),
 		fx.Invoke(func(svc *NodeIdentityService, lc fx.Lifecycle) error {
 			lc.Append(fx.StartHook(svc.BootstrapNodeIdentity))
-
-			return nil
-		}),
-		fx.Invoke(func(svc *NodeLabelService, lc fx.Lifecycle) error {
-			lc.Append(fx.StartHook(svc.CollectAndPublish))
 
 			return nil
 		}),
