@@ -11,7 +11,9 @@ import (
 	configtls "github.com/amari/mithril/mithril-node-go/internal/config/tls"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel/metric"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/fx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -25,9 +27,14 @@ func Module(serverCfg *configgrpc.Server) fx.Option {
 	opts := []fx.Option{
 		fx.Provide(
 			health.NewServer,
-			func(logger *zerolog.Logger) (*grpc.Server, error) {
+			func(logger *zerolog.Logger, mp metric.MeterProvider, tp trace.TracerProvider) (*grpc.Server, error) {
 				opts := []grpc.ServerOption{
-					grpc.StatsHandler(otelgrpc.NewServerHandler()),
+					grpc.StatsHandler(
+						otelgrpc.NewServerHandler(
+							otelgrpc.WithMeterProvider(mp),
+							otelgrpc.WithTracerProvider(tp),
+						),
+					),
 				}
 
 				if serverCfg.TLS != nil {
