@@ -20,7 +20,7 @@ services:
           cpus: "0.5"
           memory: 256M
   prometheus:
-    image: "quay.io/prometheus/prometheus:v3.9.1"
+    image: "quay.io/prometheus/prometheus:v3.10.0"
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--web.listen-address=:9090"
@@ -103,35 +103,35 @@ services:
       - etcd
     environment:
       MITHRIL_ETCD_ENDPOINTS: etcd:2379
-      MITHRIL_GRPC_ADDRESS: "[::]:50051"
-      MITHRIL_HEALTH_PORT: 8081
+      MITHRIL_GRPC_LISTEN: "[::]:50051"
+      MITHRIL_HEALTH_LISTEN: "[::]:8081"
       MITHRIL_LOG_LEVEL: info
       MITHRIL_LOG_PRETTY: true
-      MITHRIL_NODE_ADVERTISE_GRPC_URLS: chunk-node:50051
-      MITHRIL_PPROF_PORT: 6060
+      MITHRIL_ADVERTISE_GRPC_URLS: chunk-node:50051
+      MITHRIL_PPROF_LISTEN: "[::]:6060"
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "jaeger:4317"
       OTEL_EXPORTER_OTLP_TRACES_INSECURE: "true"
       OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: grpc
-      OTEL_EXPORTER_PROMETHEUS_HOST: "::"
+      OTEL_EXPORTER_PROMETHEUS_HOST: "0.0.0.0"
       OTEL_EXPORTER_PROMETHEUS_PORT: "9464"
       OTEL_METRICS_EXPORTER: prometheus
       OTEL_TRACES_EXPORTER: otlp
-      OTEL_SERVICE_NAME: mithril-chunk-node
-
+      OTEL_SERVICE_NAME: mithril-node-go
+    user: "1000:1000"
     command:
-      - "/usr/local/bin/mithril-chunk-node"
+      - "/usr/local/bin/mithril-node-go"
       - "server"
       - "--config-dir"
       - "/etc/mithril"
       - "--data-dir"
-      - "/var/lib/mithril"
+      - "/data"
       - "/volume"
     volumes:
       - ./config:/etc/mithril:ro
-      - chunk-node-data:/var/lib/mithril
+      - chunk-node-data:/data
       - chunk-node-volume:/volume
     ports:
-      - 50051:50051
+      - 50052:50052
       - 9464:9464
       - 8081:8081
       - 6060:6060
@@ -139,10 +139,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "4.0"
+          cpus: "8.0"
           memory: 1G
         reservations:
-          cpus: "4.0"
+          cpus: "8.0"
           memory: 256M
 volumes:
   chunk-node-data:

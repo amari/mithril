@@ -36,3 +36,5 @@ scrape_configs:
     static_configs:
       - targets:
           - chunk-node:9464
+    scrape_interval: 5s
+    metrics_path: /metrics

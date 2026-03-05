@@ -27,24 +27,24 @@ tasks:
     desc: Build the Go project
     deps: [proto-generate]
     cmds:
-      - go build ./chunk-node/...
+      - go build ./mithril-node-go/...
   go-test:
     desc: Run Go project tests
     deps: [proto-generate]
     cmds:
-      - go test ./chunk-node/...
+      - go test ./mithril-node-go/...
   go-bench:
     desc: Run Go project tests and benchmarks
     deps: [proto-generate]
     cmds:
-      - go test -bench=. ./chunk-node/...
+      - go test -bench=. ./mithril-node-go/...
   go-coverage:
     desc: Generate Go code coverage report using temp files
     deps: [proto-generate]
     vars:
       COVER_OUT: { sh: mktemp }
     cmds:
-      - go test -coverprofile={{.COVER_OUT}} -coverpkg=./... ./chunk-node/...
+      - go test -coverprofile={{.COVER_OUT}} -coverpkg=./... ./mithril-node-go/...
       - go-better-html-coverage -profile {{.COVER_OUT}} -o {{.COVER_OUT}}.html
   go-clean:
     desc: Run Go clean

@@ -17,11 +17,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy the rest of the source code
-COPY chunk-node/ chunk-node/
+COPY mithril-node-go/ mithril-node-go/
 COPY gen/go/ gen/go/
 
 # Build the Go binary for the target platform
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /bin/mithril-chunk-node ./chunk-node
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /bin/mithril-node-go ./mithril-node-go
 
 # ---- Runtime stage ----
 FROM debian:bookworm-slim AS runner
@@ -30,7 +30,7 @@ FROM debian:bookworm-slim AS runner
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /bin/mithril-chunk-node /usr/local/bin/mithril-chunk-node
+COPY --from=builder /bin/mithril-node-go /usr/local/bin/mithril-node-go
 
 # Create a non-root user to run the application
 RUN useradd -r -s /bin/false mithril
@@ -51,7 +51,7 @@ RUN mkdir -p /etc/mithril && \
     chmod 0755 /etc/mithril
 
 # Switch to the non-root user
-USER mithril
+#USER mithril
 
 # Set environment variables
 ENV MITHRIL_ADMIN_SOCKET=/run/mithril/admin.sock
@@ -59,4 +59,4 @@ ENV MITHRIL_DATA_DIR=/var/lib/mithril
 ENV MITHRIL_LOG_LEVEL=info
 
 # Run the command by default
-CMD ["/usr/local/bin/mithril-chunk-node"]
+CMD ["/usr/local/bin/mithril-node-go"]
