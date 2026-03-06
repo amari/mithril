@@ -50,7 +50,7 @@ func (h *shrinkChunkToFitCommandHandler) Handle(ctx context.Context, cmd *Shrink
 
 	readyChunk, ok := chunk.(*domain.ReadyChunk)
 	if !ok {
-		return nil, WithChunk(domain.ErrChunkWrongState, readyChunk)
+		return nil, domain.ErrChunkWrongState
 	}
 
 	version, ok := readyChunk.Version()

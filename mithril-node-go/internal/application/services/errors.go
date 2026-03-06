@@ -1,12 +1,11 @@
 package applicationservices
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
-	// ErrClockRegression indicates the system clock moved backwards.
-	// The ID generator refuses to generate IDs to prevent duplicates.
-	ErrClockRegression = errors.New("clock regression detected")
-
 	// ErrChunkIDSequenceOverflow indicates too many IDs were generated in the same millisecond.
 	// This is extremely rare and indicates very high load.
 	ErrChunkIDSequenceOverflow = errors.New("chunk id sequence overflow")
@@ -36,3 +35,14 @@ var (
 	ErrVolumeOpenFailed  = errors.New("volume open failed")
 	ErrVolumeCloseFailed = errors.New("volume close failed")
 )
+
+// ClockRegressionError indicates the system clock moved backwards.
+// The ID generator refuses to generate IDs to prevent duplicates.
+type ClockRegressionError struct {
+	CurrentTime int64
+	PrevTime    int64
+}
+
+func (e *ClockRegressionError) Error() string {
+	return fmt.Sprintf("clock regression: current time %d is before previous time %d", e.CurrentTime, e.PrevTime)
+}

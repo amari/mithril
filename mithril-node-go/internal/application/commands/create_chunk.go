@@ -3,6 +3,7 @@ package applicationcommands
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	applicationservices "github.com/amari/mithril/mithril-node-go/internal/application/services"
@@ -97,6 +98,11 @@ func (h *createChunkCommandHandler) handleNewChunk(ctx context.Context, cmd *Cre
 	// Create the chunk metadata
 	newPendingChunkID, err := h.chunkIDGenerator.Generate(volumeID)
 	if err != nil {
+		if clockErr, ok := errors.AsType[*applicationservices.ClockRegressionError](err); ok {
+			return nil, WithVolumeStatus(fmt.Errorf("%w: %w", domain.ErrClockRegressionDetected, clockErr), volume.GetStatusProvider().Get())
+		}
+		// TODO: map other errors
+
 		return nil, WithVolumeStatus(err, volume.GetStatusProvider().Get())
 	}
 

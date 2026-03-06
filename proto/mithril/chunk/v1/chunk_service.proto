@@ -56,6 +56,8 @@ enum ErrorCode {
   ERROR_CODE_WRONG_STATE = 12; // Chunk in wrong state for operation
   ERROR_CODE_WRONG_NODE = 13; // Request sent to wrong node
   ERROR_CODE_DATA_LOSS = 14; // Data loss
+  ERROR_CODE_CHUNK_ID_COLLISION = 15; // Duplicate chunk ID
+  ERROR_CODE_CLOCK_REGRESSION_DETECTED = 16; // Clock moved backwards
 }
 
 service ChunkService {

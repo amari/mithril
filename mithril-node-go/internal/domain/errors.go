@@ -33,6 +33,12 @@ var (
 	// ERROR_CODE_INTERNAL (catch‑all when we can’t classify better)
 	ErrChunkInternal = errors.New("chunk internal error")
 
+	// ERROR_CODE_CHUNK_ID_COLLISION (duplicate chunk ID)
+	ErrChunkIDCollision = errors.New("chunk id collision")
+
+	// ERROR_CODE_CLOCK_REGRESSION_DETECTED (clock moved backwards)
+	ErrClockRegressionDetected = errors.New("clock regression detected")
+
 	ErrNodeClaimNotFound = errors.New("node claim not found")
 	ErrNodeClaimInvalid  = errors.New("node claim invalid")
 	ErrNodeClaimConflict = errors.New("node claim conflict")

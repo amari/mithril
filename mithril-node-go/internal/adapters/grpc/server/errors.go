@@ -68,6 +68,21 @@ func StatusFromError(err error) *status.Status {
 		code = chunkv1.ErrorCode_ERROR_CODE_DATA_LOSS
 	}
 
+	if errors.Is(err, domain.ErrChunkShortWrite) {
+		st = status.New(codes.Unavailable, err.Error())
+		code = chunkv1.ErrorCode_ERROR_CODE_SHORT_WRITE
+	}
+
+	if errors.Is(err, domain.ErrChunkIDCollision) {
+		st = status.New(codes.Unavailable, err.Error())
+		code = chunkv1.ErrorCode_ERROR_CODE_CHUNK_ID_COLLISION
+	}
+
+	if errors.Is(err, domain.ErrClockRegressionDetected) {
+		st = status.New(codes.Unavailable, err.Error())
+		code = chunkv1.ErrorCode_ERROR_CODE_CLOCK_REGRESSION_DETECTED
+	}
+
 	details := &chunkv1.ErrorDetails{
 		Code: code,
 	}

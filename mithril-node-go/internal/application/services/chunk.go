@@ -18,7 +18,7 @@ type ChunkIDGenerator struct {
 
 var _ domain.ChunkIDGenerator = (*ChunkIDGenerator)(nil)
 
-func NewChunkIDGenerator(nowFunc func() time.Time, nodeIDProvider domain.NodeIDProvider) *ChunkIDGenerator {
+func NewChunkIDGenerator(nowFunc func() time.Time, clockFence ClockFence, nodeIDProvider domain.NodeIDProvider) *ChunkIDGenerator {
 	return &ChunkIDGenerator{
 		nowFunc:        nowFunc,
 		nodeIDProvider: nodeIDProvider,
@@ -33,7 +33,10 @@ func (g *ChunkIDGenerator) Generate(volume domain.VolumeID) (domain.ChunkID, err
 	defer g.mu.Unlock()
 
 	if now < g.timestamp {
-		return domain.ChunkID{}, ErrClockRegression
+		return domain.ChunkID{}, &ClockRegressionError{
+			CurrentTime: now,
+			PrevTime:    g.timestamp,
+		}
 	}
 
 	if now == g.timestamp {
@@ -57,7 +60,7 @@ type ChunkIDService struct {
 	counters map[domain.VolumeID]*chunkIDCounter
 }
 
-func NewChunkIDService(nodeIDProvider domain.NodeIDProvider, nowFunc func() time.Time) *ChunkIDService {
+func NewChunkIDService(nodeIDProvider domain.NodeIDProvider, _ ClockFence, nowFunc func() time.Time) *ChunkIDService {
 	return &ChunkIDService{
 		NodeIDProvider: nodeIDProvider,
 		NowFunc:        nowFunc,
@@ -118,7 +121,10 @@ func (g *chunkIDCounter) Next() (domain.ChunkID, error) {
 	defer g.mu.Unlock()
 
 	if now < g.timestamp {
-		return domain.ChunkID{}, ErrClockRegression
+		return domain.ChunkID{}, &ClockRegressionError{
+			CurrentTime: now,
+			PrevTime:    g.timestamp,
+		}
 	}
 
 	if now == g.timestamp {

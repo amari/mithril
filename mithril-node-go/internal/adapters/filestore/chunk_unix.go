@@ -194,7 +194,8 @@ func (s *ChunkStorage) Create(ctx context.Context, id domain.ChunkID, opts domai
 			return fmt.Errorf("%w: %w", ErrFSStatFailed, err)
 		}
 	} else {
-		return domain.ErrChunkAlreadyExists
+		// Don't clobber existing file
+		return domain.ErrChunkIDCollision
 	}
 
 	// create necessary directories
@@ -247,8 +248,13 @@ func (s *ChunkStorage) Put(ctx context.Context, id domain.ChunkID, r io.Reader, 
 	}
 
 	_, err = s.root.Stat(finalPath)
-	if !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("%w: %w", ErrFSStatFailed, err)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("%w: %w", ErrFSStatFailed, err)
+		}
+	} else {
+		// Don't clobber existing file
+		return domain.ErrChunkIDCollision
 	}
 
 	// create necessary directories
@@ -319,7 +325,7 @@ func (s *ChunkStorage) Append(ctx context.Context, id domain.ChunkID, knownSize 
 	st, err := s.root.Stat(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return domain.ErrChunkNotFound
+			return domain.ErrChunkCorrupted
 		}
 
 		return fmt.Errorf("%w: %w", ErrFSStatFailed, err)
@@ -378,7 +384,7 @@ func (s *ChunkStorage) Delete(ctx context.Context, id domain.ChunkID) error {
 	_, err := s.root.Stat(firstPath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return domain.ErrChunkNotFound
+			return domain.ErrChunkCorrupted
 		}
 
 		return fmt.Errorf("%w: %w", ErrFSStatFailed, err)
@@ -425,7 +431,7 @@ func (s *ChunkStorage) ShrinkToFit(ctx context.Context, id domain.ChunkID, known
 	st, err := s.root.Stat(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return domain.ErrChunkNotFound
+			return domain.ErrChunkCorrupted
 		}
 
 		return fmt.Errorf("%w: %w", ErrFSStatFailed, err)
