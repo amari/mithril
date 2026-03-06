@@ -106,7 +106,7 @@ services:
       MITHRIL_GRPC_LISTEN: "[::]:50051"
       MITHRIL_HEALTH_LISTEN: "[::]:8081"
       MITHRIL_LOG_LEVEL: info
-      MITHRIL_LOG_PRETTY: true
+      MITHRIL_LOG_FORMAT: json
       MITHRIL_ADVERTISE_GRPC_URLS: chunk-node:50051
       MITHRIL_PPROF_LISTEN: "[::]:6060"
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "jaeger:4317"
@@ -131,7 +131,7 @@ services:
       - chunk-node-data:/data
       - chunk-node-volume:/volume
     ports:
-      - 50052:50052
+      - 50051:50051
       - 9464:9464
       - 8081:8081
       - 6060:6060
