@@ -215,8 +215,10 @@ func (s *ChunkStorage) Create(ctx context.Context, id domain.ChunkID, opts domai
 
 	// reserve space
 	fileSize := max(0, opts.MinTailSlackLength)
-	if err := adaptersunix.Fallocate(int(f.Fd()), 0, 0, fileSize); err != nil {
-		return fmt.Errorf("%w: %w", ErrFSFallocateFailed, err)
+	if fileSize > 0 {
+		if err := adaptersunix.Fallocate(int(f.Fd()), 0, 0, fileSize); err != nil {
+			return fmt.Errorf("%w: %w", ErrFSFallocateFailed, err)
+		}
 	}
 
 	// sync file
@@ -279,8 +281,10 @@ func (s *ChunkStorage) Put(ctx context.Context, id domain.ChunkID, r io.Reader, 
 
 	// reserve space
 	fileSize := max(n, 0) + max(0, opts.MinTailSlackLength)
-	if err := adaptersunix.Fallocate(int(f.Fd()), 0, 0, fileSize); err != nil {
-		return fmt.Errorf("%w: %w", ErrFSFallocateFailed, err)
+	if fileSize > 0 {
+		if err := adaptersunix.Fallocate(int(f.Fd()), 0, 0, fileSize); err != nil {
+			return fmt.Errorf("%w: %w", ErrFSFallocateFailed, err)
+		}
 	}
 
 	// write file
