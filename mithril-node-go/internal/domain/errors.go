@@ -3,41 +3,41 @@ package domain
 import "errors"
 
 var (
-	// ERROR_CODE_NOT_FOUND
-	ErrChunkNotFound = errors.New("chunk not found")
-
-	// ERROR_CODE_ALREADY_EXISTS
-	ErrChunkAlreadyExists = errors.New("chunk already exists")
-
-	// ERROR_CODE_SHORT_WRITE
-	ErrChunkShortWrite = errors.New("chunk short write")
-
-	// ERROR_CODE_WRONG_STATE (e.g. deleted/pending when we expect ready)
-	ErrChunkWrongState = errors.New("chunk in wrong state for operation")
-
-	// ERROR_CODE_VERSION_MISMATCH (for optimistic locking / append out-of-sync)
-	ErrChunkVersionMismatch = errors.New("chunk version / size mismatch")
-
-	// ERROR_CODE_INVALID_ARGUMENT (bad offsets/lengths, negative sizes, etc.)
-	ErrChunkInvalidArgument = errors.New("invalid chunk argument")
-
-	// ERROR_CODE_NO_SPACE (ENOSPC / quota)
-	ErrVolumeNoSpace = errors.New("volume has no space")
-
-	// ERROR_CODE_VOLUME_DEGRADED / ERROR_CODE_VOLUME_FAILED
-	ErrVolumeDegraded = errors.New("volume degraded")
-	ErrVolumeFailed   = errors.New("volume failed")
-
-	ErrChunkCorrupted = errors.New("chunk corrupted")
-
 	// ERROR_CODE_INTERNAL (catch‑all when we can’t classify better)
 	ErrChunkInternal = errors.New("chunk internal error")
 
-	// ERROR_CODE_CHUNK_ID_COLLISION (duplicate chunk ID)
-	ErrChunkIDCollision = errors.New("chunk id collision")
+	// ERROR_CODE_CHUNK_NOT_FOUND
+	ErrChunkNotFound = errors.New("not found")
 
-	// ERROR_CODE_CLOCK_REGRESSION_DETECTED (clock moved backwards)
-	ErrClockRegressionDetected = errors.New("clock regression detected")
+	// ERROR_CODE_CHUNK_ALREADY_EXISTS
+	ErrChunkAlreadyExists = errors.New("already exists")
+
+	// ERROR_CODE_CHUNK_CORRUPTED
+	ErrChunkCorrupted = errors.New("chunk corrupted")
+
+	// ERROR_CODE_CHUNK_WRITE_INCOMPLETE
+	ErrChunkWriteIncomplete = errors.New("incomplete write")
+
+	// ERROR_CODE_INVALID_OPERATION (e.g. deleted/pending when we expect ready)
+	ErrChunkInvalidOperation = errors.New("invalid operation")
+
+	// ERROR_CODE_CHUNK_INVALID_VERSION (for optimistic locking / append out-of-sync)
+	ErrChunkInvalidVersion = errors.New("invalid version")
+
+	// ERROR_CODE_CHUNK_INVALID_RANGE (bad offsets/lengths, negative sizes, etc.)
+	ErrChunkInvalidRange = errors.New("invalid range")
+
+	// ERROR_CODE_CHUNK_INVALID_ID (bad chunk ID format, etc.)
+	ErrChunkInvalidID = errors.New("invalid id")
+
+	// ERROR_CODE_CLOCK_NOT_MONOTONIC (clock moved backwards)
+	ErrClockNotMonotonic = errors.New("non-monotonic clock")
+
+	// ERROR_CODE_VOLUME_DEGRADED
+	ErrVolumeDegraded = errors.New("volume degraded")
+
+	// ERROR_CODE_VOLUME_FAILED
+	ErrVolumeFailed = errors.New("volume failed")
 
 	ErrNodeClaimNotFound = errors.New("node claim not found")
 	ErrNodeClaimInvalid  = errors.New("node claim invalid")

@@ -195,7 +195,7 @@ func (s *ChunkStorage) Create(ctx context.Context, id domain.ChunkID, opts domai
 		}
 	} else {
 		// Don't clobber existing file
-		return domain.ErrChunkIDCollision
+		return domain.ErrChunkAlreadyExists
 	}
 
 	// create necessary directories
@@ -256,7 +256,7 @@ func (s *ChunkStorage) Put(ctx context.Context, id domain.ChunkID, r io.Reader, 
 		}
 	} else {
 		// Don't clobber existing file
-		return domain.ErrChunkIDCollision
+		return domain.ErrChunkAlreadyExists
 	}
 
 	// create necessary directories
@@ -296,7 +296,7 @@ func (s *ChunkStorage) Put(ctx context.Context, id domain.ChunkID, r io.Reader, 
 		return fmt.Errorf("%w: %w", ErrFSWriteFailed, err)
 	}
 	if written != n {
-		return domain.ErrChunkShortWrite
+		return domain.ErrChunkWriteIncomplete
 	}
 
 	// sync file
@@ -369,7 +369,7 @@ func (s *ChunkStorage) Append(ctx context.Context, id domain.ChunkID, knownSize 
 		return fmt.Errorf("%w: %w", ErrFSWriteFailed, err)
 	}
 	if written != n {
-		return domain.ErrChunkShortWrite
+		return domain.ErrChunkWriteIncomplete
 	}
 
 	// sync file

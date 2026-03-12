@@ -103,7 +103,7 @@ func (h *putChunkCommandHandler) handleNewChunk(ctx context.Context, cmd *PutChu
 	newPendingChunkID, err := h.chunkIDGenerator.Generate(volumeID)
 	if err != nil {
 		if clockErr, ok := errors.AsType[*applicationservices.ClockRegressionError](err); ok {
-			return nil, WithVolumeStatus(fmt.Errorf("%w: %w", domain.ErrClockRegressionDetected, clockErr), volume.GetStatusProvider().Get())
+			return nil, WithVolumeStatus(fmt.Errorf("%w: %w", domain.ErrClockNotMonotonic, clockErr), volume.GetStatusProvider().Get())
 		}
 		// TODO: map other errors
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"time"
 )
@@ -240,7 +239,7 @@ func (id ChunkID) MarshalBinary() ([]byte, error) {
 
 func (id *ChunkID) UnmarshalBinary(data []byte) error {
 	if len(data) != 16 {
-		return fmt.Errorf("invalid chunk ID: %w", ErrChunkInvalidArgument)
+		return ErrChunkInvalidID
 	}
 
 	copy(id[:], data)

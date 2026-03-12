@@ -47,7 +47,7 @@ func (h *statChunkQueryHandler) Handle(ctx context.Context, qry *StatChunkQuery)
 
 	readyChunk, ok := chunk.(*domain.ReadyChunk)
 	if !ok {
-		return nil, domain.ErrChunkWrongState
+		return nil, domain.ErrChunkInvalidOperation
 	}
 
 	volume, err := h.volumeService.GetVolume(readyChunk.ID().VolumeID())

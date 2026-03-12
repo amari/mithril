@@ -48,7 +48,7 @@ func (h *deleteChunkCommandHandler) Handle(ctx context.Context, cmd *DeleteChunk
 
 	readyChunk, ok := chunk.(*domain.ReadyChunk)
 	if !ok {
-		return nil, domain.ErrChunkWrongState
+		return nil, domain.ErrChunkInvalidOperation
 	}
 
 	volume, err := h.volumeService.GetVolume(readyChunk.ID().VolumeID())

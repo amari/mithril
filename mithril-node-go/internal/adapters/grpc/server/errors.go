@@ -18,69 +18,43 @@ func StatusFromError(err error) *status.Status {
 	st := status.New(codes.Internal, err.Error())
 	code := chunkv1.ErrorCode_ERROR_CODE_INTERNAL
 
-	if errors.Is(err, domain.ErrChunkInternal) {
-		st = status.New(codes.Internal, err.Error())
-		code = chunkv1.ErrorCode_ERROR_CODE_INTERNAL
-	}
-
-	if errors.Is(err, domain.ErrChunkNotFound) {
+	switch {
+	case errors.Is(err, domain.ErrChunkNotFound):
 		st = status.New(codes.NotFound, err.Error())
-		code = chunkv1.ErrorCode_ERROR_CODE_NOT_FOUND
-	}
-
-	if errors.Is(err, domain.ErrChunkAlreadyExists) {
+		code = chunkv1.ErrorCode_ERROR_CODE_CHUNK_NOT_FOUND
+	case errors.Is(err, domain.ErrChunkAlreadyExists):
 		st = status.New(codes.AlreadyExists, err.Error())
-		code = chunkv1.ErrorCode_ERROR_CODE_ALREADY_EXISTS
-	}
-
-	if errors.Is(err, domain.ErrChunkWrongState) {
+		code = chunkv1.ErrorCode_ERROR_CODE_CHUNK_ALREADY_EXISTS
+	case errors.Is(err, domain.ErrChunkCorrupted):
+		st = status.New(codes.DataLoss, err.Error())
+		code = chunkv1.ErrorCode_ERROR_CODE_CHUNK_CORRUPTED
+	case errors.Is(err, domain.ErrChunkWriteIncomplete):
+		st = status.New(codes.Unavailable, err.Error())
+		code = chunkv1.ErrorCode_ERROR_CODE_CHUNK_WRITE_INCOMPLETE
+	case errors.Is(err, domain.ErrChunkInvalidOperation):
 		st = status.New(codes.FailedPrecondition, err.Error())
-		code = chunkv1.ErrorCode_ERROR_CODE_WRONG_STATE
-	}
-
-	if errors.Is(err, domain.ErrChunkVersionMismatch) {
+		code = chunkv1.ErrorCode_ERROR_CODE_CHUNK_INVALID_OPERATION
+	case errors.Is(err, domain.ErrChunkInvalidVersion):
 		st = status.New(codes.FailedPrecondition, err.Error())
-		code = chunkv1.ErrorCode_ERROR_CODE_VERSION_MISMATCH
-	}
-
-	if errors.Is(err, domain.ErrChunkInvalidArgument) {
+		code = chunkv1.ErrorCode_ERROR_CODE_CHUNK_INVALID_VERSION
+	case errors.Is(err, domain.ErrChunkInvalidRange):
 		st = status.New(codes.InvalidArgument, err.Error())
-		code = chunkv1.ErrorCode_ERROR_CODE_INVALID_ARGUMENT
-	}
-
-	if errors.Is(err, domain.ErrVolumeNoSpace) {
-		st = status.New(codes.ResourceExhausted, err.Error())
-		code = chunkv1.ErrorCode_ERROR_CODE_NO_SPACE
-	}
-
-	if errors.Is(err, domain.ErrVolumeDegraded) {
+		code = chunkv1.ErrorCode_ERROR_CODE_CHUNK_INVALID_RANGE
+	case errors.Is(err, domain.ErrChunkInvalidID):
+		st = status.New(codes.InvalidArgument, err.Error())
+		code = chunkv1.ErrorCode_ERROR_CODE_CHUNK_INVALID_ID
+	case errors.Is(err, domain.ErrClockNotMonotonic):
+		st = status.New(codes.Unavailable, err.Error())
+		code = chunkv1.ErrorCode_ERROR_CODE_CLOCK_NOT_MONOTONIC
+	case errors.Is(err, domain.ErrVolumeDegraded):
 		st = status.New(codes.Unavailable, err.Error())
 		code = chunkv1.ErrorCode_ERROR_CODE_VOLUME_DEGRADED
-	}
-
-	if errors.Is(err, domain.ErrVolumeFailed) {
+	case errors.Is(err, domain.ErrVolumeFailed):
 		st = status.New(codes.Unavailable, err.Error())
 		code = chunkv1.ErrorCode_ERROR_CODE_VOLUME_FAILED
-	}
-
-	if errors.Is(err, domain.ErrChunkCorrupted) {
-		st = status.New(codes.DataLoss, err.Error())
-		code = chunkv1.ErrorCode_ERROR_CODE_DATA_LOSS
-	}
-
-	if errors.Is(err, domain.ErrChunkShortWrite) {
-		st = status.New(codes.Unavailable, err.Error())
-		code = chunkv1.ErrorCode_ERROR_CODE_SHORT_WRITE
-	}
-
-	if errors.Is(err, domain.ErrChunkIDCollision) {
-		st = status.New(codes.Unavailable, err.Error())
-		code = chunkv1.ErrorCode_ERROR_CODE_CHUNK_ID_COLLISION
-	}
-
-	if errors.Is(err, domain.ErrClockRegressionDetected) {
-		st = status.New(codes.Unavailable, err.Error())
-		code = chunkv1.ErrorCode_ERROR_CODE_CLOCK_REGRESSION_DETECTED
+	default:
+		st = status.New(codes.Internal, err.Error())
+		code = chunkv1.ErrorCode_ERROR_CODE_INTERNAL
 	}
 
 	details := &chunkv1.ErrorDetails{

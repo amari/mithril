@@ -54,7 +54,7 @@ func (h *appendChunkCommandHandler) Handle(ctx context.Context, cmd *AppendChunk
 
 	readyChunk, ok := chunk.(*domain.ReadyChunk)
 	if !ok {
-		return nil, domain.ErrChunkWrongState
+		return nil, domain.ErrChunkInvalidOperation
 	}
 
 	volume, err := h.volumeService.GetVolume(readyChunk.ID().VolumeID())
@@ -64,7 +64,7 @@ func (h *appendChunkCommandHandler) Handle(ctx context.Context, cmd *AppendChunk
 
 	version, ok := readyChunk.Version()
 	if !ok || version != cmd.ExpectedVersion {
-		return nil, WithChunkAndVolumeStatus(domain.ErrChunkVersionMismatch, readyChunk, volume.GetStatusProvider().Get())
+		return nil, WithChunkAndVolumeStatus(domain.ErrChunkInvalidVersion, readyChunk, volume.GetStatusProvider().Get())
 	}
 
 	logger := zerolog.Ctx(ctx)

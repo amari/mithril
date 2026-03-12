@@ -225,7 +225,7 @@ func (s *ChunkServiceServer) ReadChunk(req *chunkv1.ReadChunkRequest, stream grp
 
 	if start > knownSize || end > knownSize || start < 0 || end < 0 {
 		return StatusFromError(applicationcommands.WithChunkAndVolumeStatus(
-			fmt.Errorf("bad range: %w", domain.ErrChunkInvalidArgument),
+			fmt.Errorf("bad range: %w", domain.ErrChunkInvalidRange),
 			resp.Chunk,
 			resp.VolumeStatus,
 		)).Err()

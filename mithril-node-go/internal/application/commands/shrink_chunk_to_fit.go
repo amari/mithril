@@ -50,12 +50,12 @@ func (h *shrinkChunkToFitCommandHandler) Handle(ctx context.Context, cmd *Shrink
 
 	readyChunk, ok := chunk.(*domain.ReadyChunk)
 	if !ok {
-		return nil, domain.ErrChunkWrongState
+		return nil, domain.ErrChunkInvalidOperation
 	}
 
 	version, ok := readyChunk.Version()
 	if !ok || version != cmd.ExpectedVersion {
-		return nil, WithChunk(domain.ErrChunkVersionMismatch, readyChunk)
+		return nil, WithChunk(domain.ErrChunkInvalidVersion, readyChunk)
 	}
 
 	volume, err := h.volumeService.GetVolume(readyChunk.ID().VolumeID())
