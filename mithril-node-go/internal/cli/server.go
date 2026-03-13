@@ -205,15 +205,16 @@ func Server() *cli.Command {
 
 			fx.New(
 				adaptersruntime.AutoMaxProcsModule(),
+				adapterspprof.Module(&serverConfig.PProf),
 				fx.StopTimeout(30*time.Second),
 				adaptersetcd.Module(&serverConfig.Etcd),
 				adaptersfilestore.Module(),
 				adaptersfilesystem.Module(serverConfig.DataDir),
 				adaptersgrpcserver.Module(&serverConfig.Node.GRPC),
 				adaptershealth.Module(&serverConfig.Health),
+
 				adaptersotel.Module(),
 				adapterspebble.Module(serverConfig.DataDir),
-				adapterspprof.Module(&serverConfig.PProf),
 				adaptersruntime.Module(),
 				adapterssystem.Module(),
 				adapterszerolog.Module(&serverConfig.Log),

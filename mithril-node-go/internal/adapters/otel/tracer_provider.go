@@ -13,10 +13,19 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"go.uber.org/fx"
 )
 
 func NewTracerProvider(r *resource.Resource, log *zerolog.Logger, lc fx.Lifecycle, sd fx.Shutdowner) (trace.TracerProvider, error) {
+	exporterType := strings.ToLower(os.Getenv("OTEL_TRACES_EXPORTER"))
+	if exporterType == "" {
+		exporterType = "none"
+	}
+	if exporterType == "none" {
+		return noop.NewTracerProvider(), nil
+	}
+
 	exporterCtx, cancelF := context.WithCancel(context.Background())
 	lc.Append(fx.StopHook(cancelF))
 
