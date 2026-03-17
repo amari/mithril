@@ -18,6 +18,7 @@ func Module(clientCfg *configetcd.Client) fx.Option {
 
 	options := []fx.Option{
 		fx.Provide(
+			NewCardShuffleScheduler,
 			fx.Annotate(
 				NewNodeClaimRegistry,
 				fx.As(new(domain.NodeClaimRegistry)),
@@ -92,6 +93,11 @@ func Module(clientCfg *configetcd.Client) fx.Option {
 				})
 
 				return client, nil
+			},
+		),
+		fx.Invoke(
+			func(s *CardShuffleScheduler, lc fx.Lifecycle) {
+				lc.Append(fx.StartStopHook(s.Start, s.Stop))
 			},
 		),
 	}
