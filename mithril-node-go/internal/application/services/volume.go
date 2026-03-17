@@ -77,11 +77,18 @@ func (s *volumeService) Stop(ctx context.Context) error {
 	s.volumeChooser.Reset(nil)
 	s.volumeMetricsExporter.Export(nil)
 
+	wg := &sync.WaitGroup{}
+
 	for _, h := range s.handleMap {
-		_ = h.Close()
+		wg.Go(func() {
+			_ = h.Close()
+		})
 	}
+
 	s.handleMap = nil
 	s.handleSlice = nil
+
+	wg.Wait()
 
 	return nil
 }
