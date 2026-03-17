@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand"
+	"sort"
 	"sync"
 	"time"
 
@@ -37,6 +38,7 @@ type CardShuffleScheduler struct {
 
 	generation    uint64
 	lastDeckCount int
+	lastDeckHash  [32]byte
 
 	wg                   sync.WaitGroup
 	sessionCtx           context.Context
@@ -161,6 +163,7 @@ func (s *CardShuffleScheduler) performShuffleAndPublish(ctx context.Context) {
 		}
 		nodeIDs = append(nodeIDs, p.NodeId)
 	}
+	sort.Slice(nodeIDs, func(i, j int) bool { return nodeIDs[i] < nodeIDs[j] })
 
 	if len(nodeIDs) == 0 {
 		return
@@ -172,6 +175,26 @@ func (s *CardShuffleScheduler) performShuffleAndPublish(ctx context.Context) {
 		newDeckCount = factorial(len(nodeIDs))
 	} else {
 		newDeckCount = 100
+	}
+
+	if newDeckCount == s.lastDeckCount {
+		// hash the node IDs and compare with the last hash
+		h := sha256.New()
+		buf := make([]byte, 4)
+
+		for _, id := range nodeIDs {
+			binary.LittleEndian.PutUint32(buf, id)
+			h.Write(buf)
+		}
+
+		var out [32]byte
+		copy(out[:], h.Sum(nil))
+
+		if out == s.lastDeckHash {
+			return
+		}
+
+		s.lastDeckHash = out
 	}
 
 	// Cleanup only when shrinking
@@ -223,8 +246,9 @@ func (s *CardShuffleScheduler) countDecksInEtcd(ctx context.Context) int {
 	resp, err := s.client.Get(ctx, decksPrefix, clientv3.WithPrefix())
 	if err != nil {
 		s.log.Debug().Err(err).Msg("failed to count decks")
-		return 0
+		return 100
 	}
+
 	return len(resp.Kvs)
 }
 
