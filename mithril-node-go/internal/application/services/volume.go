@@ -55,10 +55,10 @@ func (s *volumeService) Start() error {
 }
 
 func (s *volumeService) Stop(ctx context.Context) error {
+	s.watchCtxCancelFunc()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	s.watchCtxCancelFunc()
 
 	stopCh := make(chan struct{})
 
