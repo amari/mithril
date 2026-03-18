@@ -241,7 +241,7 @@ func (p *NodePresencePublisher) Publish(presence *domain.NodePresence) {
 	if p.value == nil {
 		key := fmt.Sprintf("/alive/nodes/%010d", uint32(presence.ID))
 
-		p.value = NewLeasedValue(p.client, key, 5)
+		p.value = NewLeasedValue(p.client, key, 30)
 	}
 
 	msg := nodev1.Presence{
