@@ -55,17 +55,33 @@ func (s *volumeService) Start() error {
 }
 
 func (s *volumeService) Stop(ctx context.Context) error {
-	s.watchCtxCancelFunc()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	stopCh := make(chan struct{})
 
 	go func() {
 		defer close(stopCh)
 
-		s.wg.Wait()
+		func() {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+
+			s.watchCtxCancelFunc()
+
+			s.volumeChooser.Reset(nil)
+			s.volumeMetricsExporter.Export(nil)
+
+			wg := &sync.WaitGroup{}
+
+			for _, h := range s.handleMap {
+				wg.Go(func() {
+					_ = h.Close()
+				})
+			}
+
+			s.handleMap = nil
+			s.handleSlice = nil
+
+			s.wg.Wait()
+		}()
 	}()
 
 	select {
@@ -73,22 +89,6 @@ func (s *volumeService) Stop(ctx context.Context) error {
 		return ctx.Err()
 	case <-stopCh:
 	}
-
-	s.volumeChooser.Reset(nil)
-	s.volumeMetricsExporter.Export(nil)
-
-	wg := &sync.WaitGroup{}
-
-	for _, h := range s.handleMap {
-		wg.Go(func() {
-			_ = h.Close()
-		})
-	}
-
-	s.handleMap = nil
-	s.handleSlice = nil
-
-	wg.Wait()
 
 	return nil
 }
