@@ -62,8 +62,8 @@ func (f *ChunkReaderAt) Close() error {
 var _ domain.ChunkReaderAt = (*ChunkReaderAt)(nil)
 
 type ChunkStorage struct {
-	root       *adaptersfilesystem.Root
-	bufferPool *sync.Pool
+	root         *adaptersfilesystem.Root
+	writeBufPool *sync.Pool
 }
 
 var _ domain.ChunkStorage = (*ChunkStorage)(nil)
@@ -109,7 +109,7 @@ func NewChunkStorage(root *adaptersfilesystem.Root, bufferSize int) (*ChunkStora
 
 	return &ChunkStorage{
 		root: newRoot,
-		bufferPool: &sync.Pool{
+		writeBufPool: &sync.Pool{
 			New: func() any {
 				return make([]byte, max(bufferSize, 32*1024))
 			},
@@ -288,8 +288,8 @@ func (s *ChunkStorage) Put(ctx context.Context, id domain.ChunkID, r io.Reader, 
 	}
 
 	// write file
-	buf := s.bufferPool.Get().([]byte)
-	defer s.bufferPool.Put(buf)
+	buf := s.writeBufPool.Get().([]byte)
+	defer s.writeBufPool.Put(buf)
 
 	written, err := io.CopyBuffer(f, r, buf)
 	if err != nil {
@@ -361,8 +361,8 @@ func (s *ChunkStorage) Append(ctx context.Context, id domain.ChunkID, knownSize 
 	}
 
 	// write data
-	buf := s.bufferPool.Get().([]byte)
-	defer s.bufferPool.Put(buf)
+	buf := s.writeBufPool.Get().([]byte)
+	defer s.writeBufPool.Put(buf)
 
 	written, err := io.CopyBuffer(f, r, buf)
 	if err != nil {
