@@ -1,10 +1,10 @@
 package adaptersgrpcserver
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	chunkv1 "github.com/amari/mithril/gen/go/proto/mithril/chunk/v1"
 	applicationcommands "github.com/amari/mithril/mithril-node-go/internal/application/commands"
@@ -25,6 +25,8 @@ type ChunkServiceServer struct {
 	putChunkCommandHandler         applicationcommands.PutChunkCommandHandler
 	shrinkChunkToFitCommandHandler applicationcommands.ShrinkChunkToFitCommandHandler
 	statChunkQueryHandler          applicationqueries.StatChunkQueryHandler
+
+	readBufPool *sync.Pool
 }
 
 var _ chunkv1.ChunkServiceServer = (*ChunkServiceServer)(nil)
@@ -46,6 +48,12 @@ func NewChunkServiceServer(
 		putChunkCommandHandler:         putChunkCommandHandler,
 		shrinkChunkToFitCommandHandler: shrinkChunkToFitCommandHandler,
 		statChunkQueryHandler:          statChunkQueryHandler,
+
+		readBufPool: &sync.Pool{
+			New: func() interface{} {
+				return make([]byte, 32*1024) // 32KiB
+			},
+		},
 	}
 }
 
@@ -203,6 +211,8 @@ func (s *ChunkServiceServer) StatChunk(ctx context.Context, req *chunkv1.StatChu
 	}, nil
 }
 
+const CHUNK_SIZE int = 8192
+
 func (s *ChunkServiceServer) ReadChunk(req *chunkv1.ReadChunkRequest, stream grpc.ServerStreamingServer[chunkv1.ReadChunkResponse]) error {
 	resp, err := s.readChunkQueryHandler.Handle(stream.Context(), &applicationqueries.ReadChunkQuery{
 		ChunkID: req.ChunkId,
@@ -244,40 +254,45 @@ func (s *ChunkServiceServer) ReadChunk(req *chunkv1.ReadChunkRequest, stream grp
 		return err
 	}
 
-	w := bufio.NewWriter(WriterFunc(func(p []byte) (int, error) {
-		volumeStatus := resp.GetVolumeStatus()
+	buf := s.readBufPool.Get().([]byte)
+	defer s.readBufPool.Put(buf)
 
-		if volumeStatus.Health == domain.VolumeFailed {
-			return 0, domain.ErrVolumeFailed
+	for {
+		n, err := reader.Read(buf)
+		if n > 0 {
+			volumeStatus := resp.GetVolumeStatus()
+			if volumeStatus.Health == domain.VolumeFailed {
+				return StatusFromError(domain.ErrVolumeFailed).Err()
+			}
+
+			for start := 0; start < n; {
+				end := min(start+CHUNK_SIZE, n)
+
+				sendErr := stream.Send(&chunkv1.ReadChunkResponse{
+					Response: &chunkv1.ReadChunkResponse_Data{
+						Data: &chunkv1.ReadChunkResponseData{
+							Data:   buf[start:end],
+							Volume: VolumeFromDomain(&volumeStatus),
+						},
+					},
+				})
+				if sendErr != nil {
+					return sendErr
+				}
+
+				start = end
+			}
 		}
 
-		err = stream.Send(&chunkv1.ReadChunkResponse{
-			Response: &chunkv1.ReadChunkResponse_Data{
-				Data: &chunkv1.ReadChunkResponseData{
-					Data:   p,
-					Volume: VolumeFromDomain(&volumeStatus),
-				},
-			},
-		})
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
-			return 0, err
+			return StatusFromError(err).Err()
 		}
-
-		return len(p), nil
-	}))
-
-	_, err = io.Copy(w, reader)
-	if err != nil {
-		return StatusFromError(err).Err()
 	}
 
-	return w.Flush()
-}
-
-type WriterFunc func([]byte) (int, error)
-
-func (f WriterFunc) Write(p []byte) (n int, err error) {
-	return f(p)
+	return nil
 }
 
 type RecvReader struct {
