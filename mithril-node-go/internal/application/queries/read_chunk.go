@@ -55,7 +55,7 @@ func (h *readChunkQueryHandler) Handle(ctx context.Context, qry *ReadChunkQuery)
 
 	volume, err := h.volumeService.GetVolume(readyChunk.ID().VolumeID())
 	if err != nil {
-		return nil, applicationerrors.WithChunk(err, readyChunk)
+		return nil, applicationerrors.ContextErrorWithChunk(err, readyChunk)
 	}
 
 	logger := zerolog.Ctx(ctx)
@@ -71,7 +71,7 @@ func (h *readChunkQueryHandler) Handle(ctx context.Context, qry *ReadChunkQuery)
 
 	handle, err := volume.GetChunkStorage().Open(ctx, chunkID)
 	if err != nil {
-		return nil, applicationerrors.WithChunkAndVolumeStatus(err, readyChunk, volume.GetStatusProvider().Get())
+		return nil, applicationerrors.ContextErrorWithChunkAndVolumeStatus(err, readyChunk, volume.GetStatusProvider().Get())
 	}
 
 	return &ReadChunkQueryResponse{

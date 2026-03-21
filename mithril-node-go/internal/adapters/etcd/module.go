@@ -19,6 +19,7 @@ func Module(clientCfg *configetcd.Client) fx.Option {
 	options := []fx.Option{
 		fx.Provide(
 			NewCardShuffleScheduler,
+			NewClusterMap,
 			fx.Annotate(
 				NewNodeClaimRegistry,
 				fx.As(new(domain.NodeClaimRegistry)),
@@ -28,7 +29,9 @@ func Module(clientCfg *configetcd.Client) fx.Option {
 				fx.As(new(domain.NodeLabelPublisher)),
 			),
 			fx.Annotate(
-				NewNodePeerResolver,
+				func(m *ClusterMap) *ClusterMap {
+					return m
+				},
 				fx.As(new(domain.NodePeerResolver)),
 			),
 			fx.Annotate(
@@ -98,6 +101,9 @@ func Module(clientCfg *configetcd.Client) fx.Option {
 		fx.Invoke(
 			func(s *CardShuffleScheduler, lc fx.Lifecycle) {
 				lc.Append(fx.StartStopHook(s.Start, s.Stop))
+			},
+			func(m *ClusterMap, lc fx.Lifecycle) {
+				lc.Append(fx.StartStopHook(m.Start, m.Stop))
 			},
 		),
 	}

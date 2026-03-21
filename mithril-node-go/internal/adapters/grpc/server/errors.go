@@ -65,6 +65,14 @@ func StatusFromError(err error) *status.Status {
 	if errors.As(err, &appContextErr) {
 		details.Chunk = ChunkFromDomain(appContextErr.Chunk())
 		details.Volume = VolumeFromDomain(appContextErr.VolumeStatus())
+
+		if chunk := appContextErr.RemotePeerChunk(); chunk != nil {
+			details.RemotePeerChunk = RemotePeerChunkFromDomain(chunk)
+		}
+
+		if volume := appContextErr.RemotePeerVolumeStatus(); volume != nil {
+			details.RemotePeerVolume = VolumeFromDomain(volume)
+		}
 	}
 
 	st, _ = st.WithDetails(details)

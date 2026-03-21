@@ -7,11 +7,13 @@ import (
 	adaptersetcd "github.com/amari/mithril/mithril-node-go/internal/adapters/etcd"
 	adaptersfilestore "github.com/amari/mithril/mithril-node-go/internal/adapters/filestore"
 	adaptersfilesystem "github.com/amari/mithril/mithril-node-go/internal/adapters/filesystem"
+	adaptersgrpcclient "github.com/amari/mithril/mithril-node-go/internal/adapters/grpc/client"
 	adaptersgrpcserver "github.com/amari/mithril/mithril-node-go/internal/adapters/grpc/server"
 	adaptershealth "github.com/amari/mithril/mithril-node-go/internal/adapters/health"
 	adaptersotel "github.com/amari/mithril/mithril-node-go/internal/adapters/otel"
 	adapterspebble "github.com/amari/mithril/mithril-node-go/internal/adapters/pebble"
 	adapterspprof "github.com/amari/mithril/mithril-node-go/internal/adapters/pprof"
+	adaptersremotepeer "github.com/amari/mithril/mithril-node-go/internal/adapters/remotepeer"
 	adaptersruntime "github.com/amari/mithril/mithril-node-go/internal/adapters/runtime"
 	adapterssystem "github.com/amari/mithril/mithril-node-go/internal/adapters/system"
 	adapterszerolog "github.com/amari/mithril/mithril-node-go/internal/adapters/zerolog"
@@ -210,11 +212,13 @@ func Server() *cli.Command {
 				adaptersetcd.Module(&serverConfig.Etcd),
 				adaptersfilestore.Module(),
 				adaptersfilesystem.Module(serverConfig.DataDir),
+				adaptersgrpcclient.Module(),
 				adaptersgrpcserver.Module(&serverConfig.Node.GRPC),
 				adaptershealth.Module(&serverConfig.Health),
 
 				adaptersotel.Module(),
 				adapterspebble.Module(serverConfig.DataDir),
+				adaptersremotepeer.Module(),
 				adaptersruntime.Module(),
 				adapterssystem.Module(),
 				adapterszerolog.Module(&serverConfig.Log),

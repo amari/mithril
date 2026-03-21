@@ -2,6 +2,7 @@ package adaptersgrpcserver
 
 import (
 	chunkv1 "github.com/amari/mithril/gen/go/proto/mithril/chunk/v1"
+	applicationservices "github.com/amari/mithril/mithril-node-go/internal/application/services"
 	"github.com/amari/mithril/mithril-node-go/internal/domain"
 )
 
@@ -40,5 +41,20 @@ func VolumeFromDomain(status *domain.VolumeStatus) *chunkv1.Volume {
 
 	return &chunkv1.Volume{
 		State: state,
+	}
+}
+
+func RemotePeerChunkFromDomain(chunk *applicationservices.RemotePeerChunk) *chunkv1.Chunk {
+	if chunk == nil {
+		return nil
+	}
+
+	version := chunk.Version()
+	size := chunk.Size()
+
+	return &chunkv1.Chunk{
+		Id:      chunk.ID().Bytes(),
+		Version: version,
+		Size:    size,
 	}
 }

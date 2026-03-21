@@ -19,6 +19,7 @@ type ChunkServiceServer struct {
 	chunkv1.UnimplementedChunkServiceServer
 
 	appendChunkCommandHandler      applicationcommands.AppendChunkCommandHandler
+	appendFromChunkCommandHandler  applicationcommands.AppendFromChunkCommandHandler
 	createChunkCommandHandler      applicationcommands.CreateChunkCommandHandler
 	deleteChunkCommandHandler      applicationcommands.DeleteChunkCommandHandler
 	readChunkQueryHandler          applicationqueries.ReadChunkQueryHandler
@@ -33,6 +34,7 @@ var _ chunkv1.ChunkServiceServer = (*ChunkServiceServer)(nil)
 
 func NewChunkServiceServer(
 	appendChunkCommandHandler applicationcommands.AppendChunkCommandHandler,
+	appendFromChunkCommandHandler applicationcommands.AppendFromChunkCommandHandler,
 	createChunkCommandHandler applicationcommands.CreateChunkCommandHandler,
 	deleteChunkCommandHandler applicationcommands.DeleteChunkCommandHandler,
 	readChunkQueryHandler applicationqueries.ReadChunkQueryHandler,
@@ -42,6 +44,7 @@ func NewChunkServiceServer(
 ) *ChunkServiceServer {
 	return &ChunkServiceServer{
 		appendChunkCommandHandler:      appendChunkCommandHandler,
+		appendFromChunkCommandHandler:  appendFromChunkCommandHandler,
 		createChunkCommandHandler:      createChunkCommandHandler,
 		deleteChunkCommandHandler:      deleteChunkCommandHandler,
 		readChunkQueryHandler:          readChunkQueryHandler,
@@ -165,6 +168,25 @@ func (s *ChunkServiceServer) AppendChunk(stream grpc.ClientStreamingServer[chunk
 	}
 
 	return nil
+}
+
+func (s *ChunkServiceServer) AppendFromChunk(ctx context.Context, req *chunkv1.AppendFromChunkRequest) (*chunkv1.AppendFromChunkResponse, error) {
+	resp, err := s.appendFromChunkCommandHandler.Handle(ctx, &applicationcommands.AppendFromChunkCommand{
+		WriterKey:            req.WriterKey,
+		ExpectedVersion:      req.ExpectedVersion,
+		MinTailSlackLength:   req.MinTailSlackLength,
+		OtherChunkID:         req.RemoteChunkId,
+		OtherChunkRangeStart: req.RemoteChunkOffset,
+		OtherChunkRangeEnd:   req.RemoteChunkOffset + req.RemoteChunkLength,
+	})
+	if err != nil {
+		return nil, StatusFromError(err).Err()
+	}
+
+	return &chunkv1.AppendFromChunkResponse{
+		Chunk:  ChunkFromDomain(resp.Chunk),
+		Volume: VolumeFromDomain(&resp.VolumeStatus),
+	}, nil
 }
 
 func (s *ChunkServiceServer) DeleteChunk(ctx context.Context, req *chunkv1.DeleteChunkRequest) (*chunkv1.DeleteChunkResponse, error) {

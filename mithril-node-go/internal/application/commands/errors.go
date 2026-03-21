@@ -6,13 +6,13 @@ import (
 )
 
 func WithChunk(err error, c *domain.ReadyChunk) error {
-	return applicationerrors.WithChunk(err, c)
+	return applicationerrors.ContextErrorWithChunk(err, c)
 }
 
 func WithVolumeStatus(err error, s domain.VolumeStatus) error {
-	return applicationerrors.WithVolumeStatus(err, s)
+	return applicationerrors.ContextErrorWithVolumeStatus(err, s)
 }
 
 func WithChunkAndVolumeStatus(err error, c *domain.ReadyChunk, s domain.VolumeStatus) error {
-	return applicationerrors.WithChunkAndVolumeStatus(err, c, s)
+	return applicationerrors.ContextErrorWithChunkAndVolumeStatus(err, c, s)
 }

@@ -52,7 +52,7 @@ func (h *statChunkQueryHandler) Handle(ctx context.Context, qry *StatChunkQuery)
 
 	volume, err := h.volumeService.GetVolume(readyChunk.ID().VolumeID())
 	if err != nil {
-		return nil, applicationerrors.WithChunk(err, readyChunk)
+		return nil, applicationerrors.ContextErrorWithChunk(err, readyChunk)
 	}
 
 	logger := zerolog.Ctx(ctx)

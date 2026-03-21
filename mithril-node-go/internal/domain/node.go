@@ -1,7 +1,9 @@
 package domain
 
 import (
+	"bytes"
 	"context"
+	"slices"
 )
 
 type NodeID uint32
@@ -51,6 +53,10 @@ type NodePresence struct {
 	GRPC  NodePresenceGRPC
 }
 
+func (p *NodePresence) Equals(other *NodePresence) bool {
+	return p.ID == other.ID && bytes.Equal(p.Nonce[:], other.Nonce[:]) && slices.Equal(p.GRPC.URLs, other.GRPC.URLs)
+}
+
 type NodePresenceGRPC struct {
 	URLs []string
 }
@@ -58,25 +64,6 @@ type NodePresenceGRPC struct {
 type NodePresencePublisher interface {
 	Publish(presence *NodePresence)
 }
-
-type NodePresenceWatcher interface {
-	Watch(ctx context.Context, nodeID NodeID) (<-chan NodePresenceEvent, error)
-}
-
-type NodePresenceEvent interface {
-	isNodePresenceEvent()
-}
-
-type NodePresenceAddedEvent struct {
-	Presence *NodePresence
-}
-
-type NodePresenceRemovedEvent struct {
-	ID NodeID
-}
-
-func (e NodePresenceAddedEvent) isNodePresenceEvent()   {}
-func (e NodePresenceRemovedEvent) isNodePresenceEvent() {}
 
 type NodePeer struct {
 	ID   NodeID
@@ -89,4 +76,5 @@ type NodePeerGRPC struct {
 
 type NodePeerResolver interface {
 	Resolve(ctx context.Context, nodeID NodeID) (*NodePeer, error)
+	Watch(ctx context.Context, nodeID NodeID) (<-chan struct{}, error)
 }

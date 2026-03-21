@@ -33,11 +33,11 @@ message ErrorDetails {
   // Local/target volume
   optional Volume volume = 3;
   // Remote/source chunk (for cross-node ops)
-  optional Chunk remote_chunk = 4;
+  optional Chunk remote_peer_chunk = 4;
   // Remote/source volume (for cross-node ops)
-  optional Volume remote_volume = 5;
+  optional Volume remote_peer_volume = 5;
   // Remote/source node (for cross-node ops)
-  optional Node remote_node = 6;
+  optional Node remote_peer_node = 6;
 }
 
 enum ErrorCode {
@@ -134,9 +134,9 @@ message AppendFromChunkRequest {
   uint64 expected_version = 2 [(buf.validate.field).required = true];
   int64 min_tail_slack_length = 3;
 
-  bytes remote_chunk_id = 4 [(buf.validate.field).required = true];
-  int64 remote_chunk_offset = 5 [(buf.validate.field).required = true];
-  int64 remote_chunk_length = 6 [(buf.validate.field).required = true];
+  bytes remote_chunk_id = 11 [(buf.validate.field).required = true];
+  int64 remote_chunk_offset = 12 [(buf.validate.field).required = true];
+  int64 remote_chunk_length = 13 [(buf.validate.field).required = true];
 }
 
 message AppendFromChunkResponse {
