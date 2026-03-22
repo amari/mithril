@@ -30,6 +30,7 @@ type VolumeHandle struct {
 	spaceUtilizationStatisticsProvider          *SpaceUtilizationVolumeStatisticsProvider
 	iokitIOBlockStorageDriverStatisticsProvider *IOKitIOBlockStorageDriverVolumeStatisticsProvider
 	linuxBlockLayerStatisticsProvider           *LinuxBlockLayerVolumeStatisticsProvider
+	statusProvider                              *VolumeStatusProvider
 
 	started atomic.Bool
 }
@@ -66,7 +67,7 @@ func (h *VolumeHandle) GetCharacteristicsProvider() domain.VolumeCharacteristics
 func (h *VolumeHandle) GetLabelSources() []domain.VolumeLabelSource { return h.labelSources }
 
 func (h *VolumeHandle) GetStatusProvider() domain.VolumeStatusProvider {
-	return &VolumeStatusProvider{}
+	return h.statusProvider
 }
 
 func (h *VolumeHandle) GetStructuredLoggingFieldsProvider() domain.VolumeStructuredLoggingFieldsProvider {
@@ -174,6 +175,19 @@ func (h *VolumeHandle) start() error {
 		h.linuxBlockLayerStatisticsProvider = linuxBlockLayerStatisticsProvider
 	}
 
+	statusProvider := &VolumeStatusProvider{
+		spaceUtilizationSampleVolumeHealthSource: NewSpaceUtilizationSampleVolumeHealthSource(spaceUtilizationStatisticsProvider),
+	}
+	if runtime.GOOS == "darwin" {
+		statusProvider.iokitIOBlockStorageDriverStatisticsProvider = NewIOKitIOBlockStorageDriverStatisticsVolumeHealthSource(iokitIOBlockStorageDriverStatisticsProvider)
+	}
+	if runtime.GOOS == "linux" {
+		statusProvider.linuxBlockLayerStatisticsProvider = NewLinuxBlockLayerStatisticsVolumeHealthSource(linuxBlockLayerStatisticsProvider)
+	}
+	if err = statusProvider.start(); err != nil {
+		return err
+	}
+
 	h.root = root
 	h.chunkStorage = chunkStorage
 	h.characteristicsProvider = characteristicsProvider
@@ -187,6 +201,7 @@ func (h *VolumeHandle) start() error {
 	if runtime.GOOS == "linux" {
 		h.linuxBlockLayerStatisticsProvider = linuxBlockLayerStatisticsProvider
 	}
+	h.statusProvider = statusProvider
 	h.started.Store(true)
 
 	undoFuncs = nil
@@ -211,6 +226,7 @@ func (h *VolumeHandle) stop() error {
 	if h.linuxBlockLayerStatisticsProvider != nil {
 		h.linuxBlockLayerStatisticsProvider.stop()
 	}
+	_ = h.statusProvider.stop()
 	h.started.Store(false)
 
 	return nil
@@ -582,19 +598,77 @@ func (p *VolumeOTelAttributeProvider) getAttrs() []attribute.KeyValue {
 	return attrs
 }
 
-type VolumeStatusProvider struct{}
+type VolumeStatusProvider struct {
+	spaceUtilizationSampleVolumeHealthSource    *SpaceUtilizationSampleVolumeHealthSource
+	iokitIOBlockStorageDriverStatisticsProvider *IOKitIOBlockStorageDriverStatisticsVolumeHealthSource
+	linuxBlockLayerStatisticsProvider           *LinuxBlockLayerStatisticsVolumeHealthSource
+}
 
 var _ domain.VolumeStatusProvider = (*VolumeStatusProvider)(nil)
 
-func (p *VolumeStatusProvider) Get() domain.VolumeStatus {
-	return domain.VolumeStatus{
-		Health: domain.VolumeOK,
+func (p *VolumeStatusProvider) start() error {
+	if p.spaceUtilizationSampleVolumeHealthSource != nil {
+		if err := p.spaceUtilizationSampleVolumeHealthSource.start(); err != nil {
+			return err
+		}
 	}
+
+	if p.iokitIOBlockStorageDriverStatisticsProvider != nil {
+		if err := p.iokitIOBlockStorageDriverStatisticsProvider.start(); err != nil {
+			return err
+		}
+	}
+
+	if p.linuxBlockLayerStatisticsProvider != nil {
+		if err := p.linuxBlockLayerStatisticsProvider.start(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
-func (p *VolumeStatusProvider) Watch(watchCtx context.Context) <-chan struct{} {
-	ch := make(chan struct{})
-	close(ch)
+func (p *VolumeStatusProvider) stop() error {
+	if p.spaceUtilizationSampleVolumeHealthSource != nil {
+		if err := p.spaceUtilizationSampleVolumeHealthSource.stop(); err != nil {
+			return err
+		}
+	}
 
-	return ch
+	if p.iokitIOBlockStorageDriverStatisticsProvider != nil {
+		if err := p.iokitIOBlockStorageDriverStatisticsProvider.stop(); err != nil {
+			return err
+		}
+	}
+
+	if p.linuxBlockLayerStatisticsProvider != nil {
+		if err := p.linuxBlockLayerStatisticsProvider.stop(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *VolumeStatusProvider) Get() domain.VolumeStatus {
+	health := domain.VolumeOK
+
+	if p.spaceUtilizationSampleVolumeHealthSource != nil {
+		otherHealth := p.spaceUtilizationSampleVolumeHealthSource.Get()
+		health = max(health, otherHealth)
+	}
+
+	if p.iokitIOBlockStorageDriverStatisticsProvider != nil {
+		otherHealth := p.iokitIOBlockStorageDriverStatisticsProvider.Get()
+		health = max(health, otherHealth)
+	}
+
+	if p.linuxBlockLayerStatisticsProvider != nil {
+		otherHealth := p.linuxBlockLayerStatisticsProvider.Get()
+		health = max(health, otherHealth)
+	}
+
+	return domain.VolumeStatus{
+		Health: health,
+	}
 }

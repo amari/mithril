@@ -286,7 +286,6 @@ type VolumeStatus struct {
 
 type VolumeStatusProvider interface {
 	Get() VolumeStatus
-	Watch(watchCtx context.Context) <-chan struct{}
 }
 
 type VolumeHealth int
