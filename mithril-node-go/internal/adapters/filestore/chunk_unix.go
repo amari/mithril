@@ -22,14 +22,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type ChunkHandle struct {
+type SysChunkHandle struct {
 	file *os.File
 	id   domain.ChunkID
 }
 
-var _ domain.ChunkHandle = (*ChunkHandle)(nil)
+var _ domain.ChunkHandle = (*SysChunkHandle)(nil)
 
-func (h *ChunkHandle) Close() error {
+func (h *SysChunkHandle) Close() error {
 	if err := h.file.Close(); err != nil {
 		// FIXME
 		return err
@@ -37,38 +37,38 @@ func (h *ChunkHandle) Close() error {
 	return nil
 }
 
-func (h *ChunkHandle) OpenReader(ctx context.Context) (domain.ChunkReader, error) {
+func (h *SysChunkHandle) OpenReader(ctx context.Context) (domain.ChunkReader, error) {
 	return io.NopCloser(h.file), nil
 }
 
-func (h *ChunkHandle) OpenRangeReader(ctx context.Context, offset, length int64) (domain.ChunkRangeReader, error) {
+func (h *SysChunkHandle) OpenRangeReader(ctx context.Context, offset, length int64) (domain.ChunkRangeReader, error) {
 	return io.NopCloser(io.NewSectionReader(h.file, offset, length)), nil
 }
 
-func (h *ChunkHandle) OpenReaderAt(ctx context.Context) (domain.ChunkReaderAt, error) {
-	return &ChunkReaderAt{
+func (h *SysChunkHandle) OpenReaderAt(ctx context.Context) (domain.ChunkReaderAt, error) {
+	return &SysChunkReaderAt{
 		File: h.file,
 	}, nil
 }
 
-type ChunkReaderAt struct {
+type SysChunkReaderAt struct {
 	*os.File
 }
 
-func (f *ChunkReaderAt) Close() error {
+func (f *SysChunkReaderAt) Close() error {
 	return nil
 }
 
-var _ domain.ChunkReaderAt = (*ChunkReaderAt)(nil)
+var _ domain.ChunkReaderAt = (*SysChunkReaderAt)(nil)
 
-type ChunkStorage struct {
+type SysChunkStorage struct {
 	root         *adaptersfilesystem.Root
 	writeBufPool *sync.Pool
 }
 
-var _ domain.ChunkStorage = (*ChunkStorage)(nil)
+var _ domain.ChunkStorage = (*SysChunkStorage)(nil)
 
-func NewChunkStorage(root *adaptersfilesystem.Root, bufferSize int) (*ChunkStorage, error) {
+func NewSysChunkStorage(root *adaptersfilesystem.Root, bufferSize int) (*SysChunkStorage, error) {
 	fdSet := adaptersfilesystem.NewFdSet()
 
 	_, err := root.Stat("chunks")
@@ -107,7 +107,7 @@ func NewChunkStorage(root *adaptersfilesystem.Root, bufferSize int) (*ChunkStora
 		return nil, fmt.Errorf("%w: %w", ErrFSCloseFailed, err)
 	}
 
-	return &ChunkStorage{
+	return &SysChunkStorage{
 		root: newRoot,
 		writeBufPool: &sync.Pool{
 			New: func() any {
@@ -117,11 +117,11 @@ func NewChunkStorage(root *adaptersfilesystem.Root, bufferSize int) (*ChunkStora
 	}, nil
 }
 
-func (s *ChunkStorage) start() error {
+func (s *SysChunkStorage) start() error {
 	return nil
 }
 
-func (s *ChunkStorage) stop() error {
+func (s *SysChunkStorage) stop() error {
 	s.root.Close()
 
 	return nil
@@ -166,7 +166,7 @@ func chunkPath(id domain.ChunkID, state domain.ChunkState) string {
 	return b.String()
 }
 
-func (s *ChunkStorage) Open(ctx context.Context, id domain.ChunkID) (domain.ChunkHandle, error) {
+func (s *SysChunkStorage) Open(ctx context.Context, id domain.ChunkID) (domain.ChunkHandle, error) {
 	path := chunkPath(id, domain.ChunkStateReady)
 
 	f, err := s.root.OpenFile(path, os.O_RDONLY, 0o600)
@@ -180,12 +180,12 @@ func (s *ChunkStorage) Open(ctx context.Context, id domain.ChunkID) (domain.Chun
 
 	zerolog.Ctx(ctx).Info().Str("chunk.file.path", path).Msg("opened chunk")
 
-	return &ChunkHandle{
+	return &SysChunkHandle{
 		file: f,
 	}, nil
 }
 
-func (s *ChunkStorage) Create(ctx context.Context, id domain.ChunkID, opts domain.CreateChunkOptions) error {
+func (s *SysChunkStorage) Create(ctx context.Context, id domain.ChunkID, opts domain.CreateChunkOptions) error {
 	path := chunkPath(id, domain.ChunkStateReady)
 
 	_, err := s.root.Stat(path)
@@ -239,7 +239,7 @@ func (s *ChunkStorage) Create(ctx context.Context, id domain.ChunkID, opts domai
 	return nil
 }
 
-func (s *ChunkStorage) Put(ctx context.Context, id domain.ChunkID, r io.Reader, n int64, opts domain.PutChunkOptions) error {
+func (s *SysChunkStorage) Put(ctx context.Context, id domain.ChunkID, r io.Reader, n int64, opts domain.PutChunkOptions) error {
 	firstPath := chunkPath(id, domain.ChunkStatePending)
 	finalPath := chunkPath(id, domain.ChunkStateReady)
 
@@ -322,7 +322,7 @@ func (s *ChunkStorage) Put(ctx context.Context, id domain.ChunkID, r io.Reader, 
 	return nil
 }
 
-func (s *ChunkStorage) Append(ctx context.Context, id domain.ChunkID, knownSize int64, r io.Reader, n int64, opts domain.AppendChunkOptions) error {
+func (s *SysChunkStorage) Append(ctx context.Context, id domain.ChunkID, knownSize int64, r io.Reader, n int64, opts domain.AppendChunkOptions) error {
 	path := chunkPath(id, domain.ChunkStateReady)
 
 	// does the chunk exist?
@@ -380,7 +380,7 @@ func (s *ChunkStorage) Append(ctx context.Context, id domain.ChunkID, knownSize 
 	return nil
 }
 
-func (s *ChunkStorage) Delete(ctx context.Context, id domain.ChunkID) error {
+func (s *SysChunkStorage) Delete(ctx context.Context, id domain.ChunkID) error {
 	firstPath := chunkPath(id, domain.ChunkStateReady)
 	finalPath := chunkPath(id, domain.ChunkStateDeleted)
 
@@ -428,7 +428,7 @@ func (s *ChunkStorage) Delete(ctx context.Context, id domain.ChunkID) error {
 	return nil
 }
 
-func (s *ChunkStorage) ShrinkToFit(ctx context.Context, id domain.ChunkID, knownSize int64, opts domain.ShrinkChunkToFitOptions) error {
+func (s *SysChunkStorage) ShrinkToFit(ctx context.Context, id domain.ChunkID, knownSize int64, opts domain.ShrinkChunkToFitOptions) error {
 	path := chunkPath(id, domain.ChunkStateReady)
 
 	// does the chunk exist?
@@ -467,7 +467,7 @@ func (s *ChunkStorage) ShrinkToFit(ctx context.Context, id domain.ChunkID, known
 	return nil
 }
 
-func (s *ChunkStorage) Exists(ctx context.Context, id domain.ChunkID) (bool, error) {
+func (s *SysChunkStorage) Exists(ctx context.Context, id domain.ChunkID) (bool, error) {
 	path := chunkPath(id, domain.ChunkStateReady)
 
 	st, err := s.root.Stat(path)
