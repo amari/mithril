@@ -219,7 +219,7 @@ func ParseChunkID(s string) (ChunkID, error) {
 	}
 
 	if len(data) != 16 {
-		// FIXME
+		return ChunkID{}, ErrChunkInvalidID
 	}
 
 	var id ChunkID
