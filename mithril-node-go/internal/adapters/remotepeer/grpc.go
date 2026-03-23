@@ -128,7 +128,7 @@ func (c *GRPCRemotePeerChunkServiceClient) OpenRangeReader(ctx context.Context, 
 
 	header := msg.GetHeader()
 	if header == nil {
-		return nil, fmt.Errorf("expected header message: %w", domain.ErrChunkInternal)
+		return nil, fmt.Errorf("expected header message: %w", domain.ErrInternal)
 	}
 
 	headerVolumeStatus := VolumeStatusFromProto(header.Volume)
@@ -158,7 +158,7 @@ func (c *GRPCRemotePeerChunkServiceClient) OpenRangeReader(ctx context.Context, 
 
 		dataMsg := msg.GetData()
 		if dataMsg == nil {
-			return nil, fmt.Errorf("expected data message: %w", domain.ErrChunkInternal)
+			return nil, fmt.Errorf("expected data message: %w", domain.ErrInternal)
 		}
 
 		r.volumeStatus = VolumeStatusFromProto(dataMsg.GetVolume())

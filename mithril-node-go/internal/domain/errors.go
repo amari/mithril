@@ -4,7 +4,13 @@ import "errors"
 
 var (
 	// ERROR_CODE_INTERNAL (catch‑all when we can’t classify better)
-	ErrChunkInternal = errors.New("chunk internal error")
+	ErrInternal = errors.New("internal error")
+
+	// ERROR_CODE_CANCELED
+	ErrCanceled = errors.New("canceled")
+
+	// ERROR_CODE_DEADLINE_EXCEEDED
+	ErrDeadlineExceeded = errors.New("deadline exceeded")
 
 	// ERROR_CODE_CHUNK_NOT_FOUND
 	ErrChunkNotFound = errors.New("not found")

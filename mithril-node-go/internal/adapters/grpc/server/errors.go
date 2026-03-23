@@ -1,6 +1,7 @@
 package adaptersgrpcserver
 
 import (
+	"context"
 	"errors"
 
 	chunkv1 "github.com/amari/mithril/gen/go/proto/mithril/chunk/v1"
@@ -52,6 +53,12 @@ func StatusFromError(err error) *status.Status {
 	case errors.Is(err, domain.ErrVolumeFailed):
 		st = status.New(codes.Unavailable, err.Error())
 		code = chunkv1.ErrorCode_ERROR_CODE_VOLUME_FAILED
+	case errors.Is(err, domain.ErrCanceled) || errors.Is(err, context.Canceled):
+		st = status.New(codes.Canceled, err.Error())
+		code = chunkv1.ErrorCode_ERROR_CODE_CANCELED
+	case errors.Is(err, domain.ErrDeadlineExceeded) || errors.Is(err, context.DeadlineExceeded):
+		st = status.New(codes.DeadlineExceeded, err.Error())
+		code = chunkv1.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED
 	default:
 		st = status.New(codes.Internal, err.Error())
 		code = chunkv1.ErrorCode_ERROR_CODE_INTERNAL

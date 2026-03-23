@@ -18,12 +18,16 @@ func StatusToError(st *status.Status) error {
 			continue
 		}
 
-		var err error = domain.ErrChunkInternal
+		var err error = domain.ErrInternal
 
 		switch d.Code {
 		case chunkv1.ErrorCode_ERROR_CODE_UNSPECIFIED:
 		case chunkv1.ErrorCode_ERROR_CODE_INTERNAL:
-			err = domain.ErrChunkInternal
+			err = domain.ErrInternal
+		case chunkv1.ErrorCode_ERROR_CODE_CANCELED:
+			err = domain.ErrCanceled
+		case chunkv1.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED:
+			err = domain.ErrDeadlineExceeded
 		case chunkv1.ErrorCode_ERROR_CODE_CHUNK_NOT_FOUND:
 			err = domain.ErrChunkNotFound
 		case chunkv1.ErrorCode_ERROR_CODE_CHUNK_ALREADY_EXISTS:
@@ -47,7 +51,7 @@ func StatusToError(st *status.Status) error {
 		case chunkv1.ErrorCode_ERROR_CODE_VOLUME_FAILED:
 			err = domain.ErrVolumeFailed
 		default:
-			err = domain.ErrChunkInternal
+			err = domain.ErrInternal
 		}
 
 		contextErr := applicationerrors.NewContextError(err)
@@ -66,5 +70,5 @@ func StatusToError(st *status.Status) error {
 		return contextErr
 	}
 
-	return domain.ErrChunkInternal
+	return domain.ErrInternal
 }
