@@ -100,8 +100,8 @@ func (s *VolumeSet) MarshalBinary() ([]byte, error) {
 }
 
 func (s *VolumeSet) UnmarshalBinary(data []byte) error {
-	full := len(data) / 64
-	rem := len(data) % 64
+	full := len(data) / 8
+	rem := len(data) % 8
 
 	n := full
 	if rem != 0 {
