@@ -12,6 +12,12 @@ type VolumeHealthSource interface {
 	Get() domain.VolumeHealth
 }
 
+type VolumeHealthWatcher interface {
+	OK() <-chan struct{}
+	Degraded() <-chan struct{}
+	Failed() <-chan struct{}
+}
+
 type SpaceUtilizationSampleVolumeHealthSource struct {
 	statisticsProvider domain.VolumeStatisticsProvider[domain.SpaceUtilizationStatistics]
 

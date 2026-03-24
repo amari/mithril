@@ -176,6 +176,7 @@ func (h *VolumeHandle) start() error {
 	}
 
 	statusProvider := &VolumeStatusProvider{
+		chunkStorageHealthController:             chunkStorage.healthController,
 		spaceUtilizationSampleVolumeHealthSource: NewSpaceUtilizationSampleVolumeHealthSource(spaceUtilizationStatisticsProvider),
 	}
 	if runtime.GOOS == "darwin" {
@@ -599,6 +600,7 @@ func (p *VolumeOTelAttributeProvider) getAttrs() []attribute.KeyValue {
 }
 
 type VolumeStatusProvider struct {
+	chunkStorageHealthController                *ChunkStorageHealthController
 	spaceUtilizationSampleVolumeHealthSource    *SpaceUtilizationSampleVolumeHealthSource
 	iokitIOBlockStorageDriverStatisticsProvider *IOKitIOBlockStorageDriverStatisticsVolumeHealthSource
 	linuxBlockLayerStatisticsProvider           *LinuxBlockLayerStatisticsVolumeHealthSource
@@ -652,6 +654,11 @@ func (p *VolumeStatusProvider) stop() error {
 
 func (p *VolumeStatusProvider) Get() domain.VolumeStatus {
 	health := domain.VolumeOK
+
+	if p.chunkStorageHealthController != nil {
+		otherHealth := p.chunkStorageHealthController.Get()
+		health = max(health, otherHealth)
+	}
 
 	if p.spaceUtilizationSampleVolumeHealthSource != nil {
 		otherHealth := p.spaceUtilizationSampleVolumeHealthSource.Get()

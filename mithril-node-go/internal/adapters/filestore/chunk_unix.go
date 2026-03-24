@@ -20,7 +20,6 @@ import (
 	adaptersunix "github.com/amari/mithril/mithril-node-go/internal/adapters/unix"
 	"github.com/amari/mithril/mithril-node-go/internal/domain"
 	"github.com/rs/zerolog"
-	"golang.org/x/sys/unix"
 )
 
 type ChunkHandle struct {
@@ -65,6 +64,8 @@ var _ domain.ChunkReaderAt = (*ChunkReaderAt)(nil)
 type ChunkStorage struct {
 	root         *adaptersfilesystem.Root
 	writeBufPool *sync.Pool
+
+	healthController *ChunkStorageHealthController
 }
 
 var _ domain.ChunkStorage = (*ChunkStorage)(nil)
@@ -115,6 +116,7 @@ func NewChunkStorage(root *adaptersfilesystem.Root, bufferSize int) (*ChunkStora
 				return make([]byte, max(bufferSize, 32*1024))
 			},
 		},
+		healthController: NewChunkStorageHealthController(),
 	}, nil
 }
 
@@ -167,7 +169,15 @@ func chunkPath(id domain.ChunkID, state domain.ChunkState) string {
 	return b.String()
 }
 
+func (s *ChunkStorage) HealthController() *ChunkStorageHealthController {
+	return s.healthController
+}
+
 func (s *ChunkStorage) Open(ctx context.Context, id domain.ChunkID) (domain.ChunkHandle, error) {
+	if s.healthController.IsFailed() {
+		return nil, domain.ErrVolumeFailed
+	}
+
 	type openResult struct {
 		handle domain.ChunkHandle
 		err    error
@@ -185,13 +195,18 @@ func (s *ChunkStorage) Open(ctx context.Context, id domain.ChunkID) (domain.Chun
 	case res := <-doneCh:
 		handle, err := res.handle, res.err
 
-		if errors.Is(err, unix.EDQUOT) || errors.Is(err, unix.ENOSPC) {
-			return handle, fmt.Errorf("%w: %w", domain.ErrVolumeDegraded, err)
-		} else if errors.Is(err, unix.EIO) || errors.Is(err, ErrFSFsyncFailed) {
-			return handle, fmt.Errorf("%w: %w", domain.ErrVolumeFailed, err)
-		}
+		err = s.healthController.handleError(err)
 
 		return handle, err
+	case <-s.healthController.Failed():
+		go func() {
+			res, ok := <-doneCh
+			if ok && res.handle != nil {
+				res.handle.Close()
+			}
+		}()
+
+		return nil, domain.ErrVolumeFailed
 	case <-ctx.Done():
 		go func() {
 			res, ok := <-doneCh
@@ -224,6 +239,10 @@ func (s *ChunkStorage) open(ctx context.Context, id domain.ChunkID) (domain.Chun
 }
 
 func (s *ChunkStorage) Create(ctx context.Context, id domain.ChunkID, opts domain.CreateChunkOptions) error {
+	if s.healthController.IsFailed() {
+		return domain.ErrVolumeFailed
+	}
+
 	doneCh := make(chan error, 1)
 
 	go func() {
@@ -234,13 +253,11 @@ func (s *ChunkStorage) Create(ctx context.Context, id domain.ChunkID, opts domai
 
 	select {
 	case err := <-doneCh:
-		if errors.Is(err, unix.EDQUOT) || errors.Is(err, unix.ENOSPC) {
-			return fmt.Errorf("%w: %w", domain.ErrVolumeDegraded, err)
-		} else if errors.Is(err, unix.EIO) || errors.Is(err, ErrFSFsyncFailed) {
-			return fmt.Errorf("%w: %w", domain.ErrVolumeFailed, err)
-		}
+		err = s.healthController.handleError(err)
 
 		return err
+	case <-s.healthController.Failed():
+		return domain.ErrVolumeFailed
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -301,6 +318,10 @@ func (s *ChunkStorage) create(ctx context.Context, id domain.ChunkID, opts domai
 }
 
 func (s *ChunkStorage) Put(ctx context.Context, id domain.ChunkID, r io.Reader, n int64, opts domain.PutChunkOptions) error {
+	if s.healthController.IsFailed() {
+		return domain.ErrVolumeFailed
+	}
+
 	doneCh := make(chan error, 1)
 
 	go func() {
@@ -311,13 +332,11 @@ func (s *ChunkStorage) Put(ctx context.Context, id domain.ChunkID, r io.Reader, 
 
 	select {
 	case err := <-doneCh:
-		if errors.Is(err, unix.EDQUOT) || errors.Is(err, unix.ENOSPC) {
-			return fmt.Errorf("%w: %w", domain.ErrVolumeDegraded, err)
-		} else if errors.Is(err, unix.EIO) || errors.Is(err, ErrFSFsyncFailed) {
-			return fmt.Errorf("%w: %w", domain.ErrVolumeFailed, err)
-		}
+		err = s.healthController.handleError(err)
 
 		return err
+	case <-s.healthController.Failed():
+		return domain.ErrVolumeFailed
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -407,6 +426,10 @@ func (s *ChunkStorage) put(ctx context.Context, id domain.ChunkID, r io.Reader, 
 }
 
 func (s *ChunkStorage) Append(ctx context.Context, id domain.ChunkID, knownSize int64, r io.Reader, n int64, opts domain.AppendChunkOptions) error {
+	if s.healthController.IsFailed() {
+		return domain.ErrVolumeFailed
+	}
+
 	doneCh := make(chan error, 1)
 
 	go func() {
@@ -417,13 +440,11 @@ func (s *ChunkStorage) Append(ctx context.Context, id domain.ChunkID, knownSize 
 
 	select {
 	case err := <-doneCh:
-		if errors.Is(err, unix.EDQUOT) || errors.Is(err, unix.ENOSPC) {
-			return fmt.Errorf("%w: %w", domain.ErrVolumeDegraded, err)
-		} else if errors.Is(err, unix.EIO) || errors.Is(err, ErrFSFsyncFailed) {
-			return fmt.Errorf("%w: %w", domain.ErrVolumeFailed, err)
-		}
+		err = s.healthController.handleError(err)
 
 		return err
+	case <-s.healthController.Failed():
+		return domain.ErrVolumeFailed
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -488,6 +509,10 @@ func (s *ChunkStorage) append(ctx context.Context, id domain.ChunkID, knownSize 
 }
 
 func (s *ChunkStorage) Delete(ctx context.Context, id domain.ChunkID) error {
+	if s.healthController.IsFailed() {
+		return domain.ErrVolumeFailed
+	}
+
 	doneCh := make(chan error, 1)
 
 	go func() {
@@ -498,13 +523,11 @@ func (s *ChunkStorage) Delete(ctx context.Context, id domain.ChunkID) error {
 
 	select {
 	case err := <-doneCh:
-		if errors.Is(err, unix.EDQUOT) || errors.Is(err, unix.ENOSPC) {
-			return fmt.Errorf("%w: %w", domain.ErrVolumeDegraded, err)
-		} else if errors.Is(err, unix.EIO) || errors.Is(err, ErrFSFsyncFailed) {
-			return fmt.Errorf("%w: %w", domain.ErrVolumeFailed, err)
-		}
+		err = s.healthController.handleError(err)
 
 		return err
+	case <-s.healthController.Failed():
+		return domain.ErrVolumeFailed
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -559,6 +582,10 @@ func (s *ChunkStorage) delete(ctx context.Context, id domain.ChunkID) error {
 }
 
 func (s *ChunkStorage) ShrinkToFit(ctx context.Context, id domain.ChunkID, knownSize int64, opts domain.ShrinkChunkToFitOptions) error {
+	if s.healthController.IsFailed() {
+		return domain.ErrVolumeFailed
+	}
+
 	doneCh := make(chan error, 1)
 
 	go func() {
@@ -569,13 +596,11 @@ func (s *ChunkStorage) ShrinkToFit(ctx context.Context, id domain.ChunkID, known
 
 	select {
 	case err := <-doneCh:
-		if errors.Is(err, unix.EDQUOT) || errors.Is(err, unix.ENOSPC) {
-			return fmt.Errorf("%w: %w", domain.ErrVolumeDegraded, err)
-		} else if errors.Is(err, unix.EIO) || errors.Is(err, ErrFSFsyncFailed) {
-			return fmt.Errorf("%w: %w", domain.ErrVolumeFailed, err)
-		}
+		err = s.healthController.handleError(err)
 
 		return err
+	case <-s.healthController.Failed():
+		return domain.ErrVolumeFailed
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -621,6 +646,10 @@ func (s *ChunkStorage) shrinkToFit(ctx context.Context, id domain.ChunkID, known
 }
 
 func (s *ChunkStorage) Exists(ctx context.Context, id domain.ChunkID) (bool, error) {
+	if s.healthController.IsFailed() {
+		return false, domain.ErrVolumeFailed
+	}
+
 	type existsResult struct {
 		exists bool
 		err    error
@@ -638,6 +667,8 @@ func (s *ChunkStorage) Exists(ctx context.Context, id domain.ChunkID) (bool, err
 	select {
 	case res := <-doneCh:
 		return res.exists, res.err
+	case <-s.healthController.Failed():
+		return false, domain.ErrVolumeFailed
 	case <-ctx.Done():
 		return false, ctx.Err()
 	}
