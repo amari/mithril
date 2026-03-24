@@ -20,6 +20,7 @@ import (
 	adaptersunix "github.com/amari/mithril/mithril-node-go/internal/adapters/unix"
 	"github.com/amari/mithril/mithril-node-go/internal/domain"
 	"github.com/rs/zerolog"
+	"golang.org/x/sys/unix"
 )
 
 type SysChunkHandle struct {
@@ -167,6 +168,21 @@ func chunkPath(id domain.ChunkID, state domain.ChunkState) string {
 }
 
 func (s *SysChunkStorage) Open(ctx context.Context, id domain.ChunkID) (domain.ChunkHandle, error) {
+	handle, err := s.open(ctx, id)
+	if err != nil {
+		if errors.Is(err, unix.EDQUOT) || errors.Is(err, unix.ENOSPC) {
+			return handle, fmt.Errorf("%w: %w", domain.ErrVolumeDegraded, err)
+		} else if errors.Is(err, unix.EIO) || errors.Is(err, ErrFSFsyncFailed) {
+			return handle, fmt.Errorf("%w: %w", domain.ErrVolumeFailed, err)
+		}
+
+		return nil, err
+	}
+
+	return handle, nil
+}
+
+func (s *SysChunkStorage) open(ctx context.Context, id domain.ChunkID) (domain.ChunkHandle, error) {
 	path := chunkPath(id, domain.ChunkStateReady)
 
 	f, err := s.root.OpenFile(path, os.O_RDONLY, 0o600)
@@ -186,6 +202,20 @@ func (s *SysChunkStorage) Open(ctx context.Context, id domain.ChunkID) (domain.C
 }
 
 func (s *SysChunkStorage) Create(ctx context.Context, id domain.ChunkID, opts domain.CreateChunkOptions) error {
+	if err := s.create(ctx, id, opts); err != nil {
+		if errors.Is(err, unix.EDQUOT) || errors.Is(err, unix.ENOSPC) {
+			return fmt.Errorf("%w: %w", domain.ErrVolumeDegraded, err)
+		} else if errors.Is(err, unix.EIO) || errors.Is(err, ErrFSFsyncFailed) {
+			return fmt.Errorf("%w: %w", domain.ErrVolumeFailed, err)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (s *SysChunkStorage) create(ctx context.Context, id domain.ChunkID, opts domain.CreateChunkOptions) error {
 	path := chunkPath(id, domain.ChunkStateReady)
 
 	_, err := s.root.Stat(path)
@@ -240,6 +270,20 @@ func (s *SysChunkStorage) Create(ctx context.Context, id domain.ChunkID, opts do
 }
 
 func (s *SysChunkStorage) Put(ctx context.Context, id domain.ChunkID, r io.Reader, n int64, opts domain.PutChunkOptions) error {
+	if err := s.put(ctx, id, r, n, opts); err != nil {
+		if errors.Is(err, unix.EDQUOT) || errors.Is(err, unix.ENOSPC) {
+			return fmt.Errorf("%w: %w", domain.ErrVolumeDegraded, err)
+		} else if errors.Is(err, unix.EIO) || errors.Is(err, ErrFSFsyncFailed) {
+			return fmt.Errorf("%w: %w", domain.ErrVolumeFailed, err)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (s *SysChunkStorage) put(ctx context.Context, id domain.ChunkID, r io.Reader, n int64, opts domain.PutChunkOptions) error {
 	firstPath := chunkPath(id, domain.ChunkStatePending)
 	finalPath := chunkPath(id, domain.ChunkStateReady)
 
@@ -323,6 +367,20 @@ func (s *SysChunkStorage) Put(ctx context.Context, id domain.ChunkID, r io.Reade
 }
 
 func (s *SysChunkStorage) Append(ctx context.Context, id domain.ChunkID, knownSize int64, r io.Reader, n int64, opts domain.AppendChunkOptions) error {
+	if err := s.append(ctx, id, knownSize, r, n, opts); err != nil {
+		if errors.Is(err, unix.EDQUOT) || errors.Is(err, unix.ENOSPC) {
+			return fmt.Errorf("%w: %w", domain.ErrVolumeDegraded, err)
+		} else if errors.Is(err, unix.EIO) || errors.Is(err, ErrFSFsyncFailed) {
+			return fmt.Errorf("%w: %w", domain.ErrVolumeFailed, err)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (s *SysChunkStorage) append(ctx context.Context, id domain.ChunkID, knownSize int64, r io.Reader, n int64, opts domain.AppendChunkOptions) error {
 	path := chunkPath(id, domain.ChunkStateReady)
 
 	// does the chunk exist?
@@ -381,6 +439,20 @@ func (s *SysChunkStorage) Append(ctx context.Context, id domain.ChunkID, knownSi
 }
 
 func (s *SysChunkStorage) Delete(ctx context.Context, id domain.ChunkID) error {
+	if err := s.delete(ctx, id); err != nil {
+		if errors.Is(err, unix.EDQUOT) || errors.Is(err, unix.ENOSPC) {
+			return fmt.Errorf("%w: %w", domain.ErrVolumeDegraded, err)
+		} else if errors.Is(err, unix.EIO) || errors.Is(err, ErrFSFsyncFailed) {
+			return fmt.Errorf("%w: %w", domain.ErrVolumeFailed, err)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (s *SysChunkStorage) delete(ctx context.Context, id domain.ChunkID) error {
 	firstPath := chunkPath(id, domain.ChunkStateReady)
 	finalPath := chunkPath(id, domain.ChunkStateDeleted)
 
@@ -429,6 +501,20 @@ func (s *SysChunkStorage) Delete(ctx context.Context, id domain.ChunkID) error {
 }
 
 func (s *SysChunkStorage) ShrinkToFit(ctx context.Context, id domain.ChunkID, knownSize int64, opts domain.ShrinkChunkToFitOptions) error {
+	if err := s.shrinkToFit(ctx, id, knownSize, opts); err != nil {
+		if errors.Is(err, unix.EDQUOT) || errors.Is(err, unix.ENOSPC) {
+			return fmt.Errorf("%w: %w", domain.ErrVolumeDegraded, err)
+		} else if errors.Is(err, unix.EIO) || errors.Is(err, ErrFSFsyncFailed) {
+			return fmt.Errorf("%w: %w", domain.ErrVolumeFailed, err)
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (s *SysChunkStorage) shrinkToFit(ctx context.Context, id domain.ChunkID, knownSize int64, opts domain.ShrinkChunkToFitOptions) error {
 	path := chunkPath(id, domain.ChunkStateReady)
 
 	// does the chunk exist?
