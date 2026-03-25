@@ -8,6 +8,7 @@ import (
 
 	chunkv1 "github.com/amari/mithril/gen/go/proto/mithril/chunk/v1"
 	applicationcommands "github.com/amari/mithril/mithril-node-go/internal/application/commands"
+	applicationerrors "github.com/amari/mithril/mithril-node-go/internal/application/errors"
 	applicationqueries "github.com/amari/mithril/mithril-node-go/internal/application/queries"
 	"github.com/amari/mithril/mithril-node-go/internal/domain"
 	"google.golang.org/grpc"
@@ -244,24 +245,24 @@ func (s *ChunkServiceServer) ReadChunk(req *chunkv1.ReadChunkRequest, stream grp
 	}
 	defer resp.ChunkHandle.Close()
 
-	reader, err := resp.ChunkHandle.OpenRangeReader(stream.Context(), req.Offset, req.Length)
-	if err != nil {
-		return StatusFromError(err).Err()
-	}
-	defer reader.Close()
-
 	knownSize, _ := resp.Chunk.Size()
 
 	start := req.Offset
 	end := req.Offset + req.Length
 
 	if start > knownSize || end > knownSize || start < 0 || end < 0 {
-		return StatusFromError(applicationcommands.WithChunkAndVolumeStatus(
+		return StatusFromError(applicationerrors.ContextErrorWithChunkAndVolumeStatus(
 			fmt.Errorf("bad range: %w", domain.ErrChunkInvalidRange),
 			resp.Chunk,
 			resp.VolumeStatus,
 		)).Err()
 	}
+
+	reader, err := resp.ChunkHandle.OpenRangeReader(stream.Context(), req.Offset, req.Length)
+	if err != nil {
+		return StatusFromError(err).Err()
+	}
+	defer reader.Close()
 
 	err = stream.Send(&chunkv1.ReadChunkResponse{
 		Response: &chunkv1.ReadChunkResponse_Header{
@@ -287,13 +288,13 @@ func (s *ChunkServiceServer) ReadChunk(req *chunkv1.ReadChunkRequest, stream grp
 				return StatusFromError(domain.ErrVolumeFailed).Err()
 			}
 
-			for start := 0; start < n; {
-				end := min(start+CHUNK_SIZE, n)
+			for offset := 0; offset < n; {
+				limit := min(offset+CHUNK_SIZE, n)
 
 				sendErr := stream.Send(&chunkv1.ReadChunkResponse{
 					Response: &chunkv1.ReadChunkResponse_Data{
 						Data: &chunkv1.ReadChunkResponseData{
-							Data:   buf[start:end],
+							Data:   buf[offset:limit],
 							Volume: VolumeFromDomain(&volumeStatus),
 						},
 					},
@@ -302,7 +303,7 @@ func (s *ChunkServiceServer) ReadChunk(req *chunkv1.ReadChunkRequest, stream grp
 					return sendErr
 				}
 
-				start = end
+				offset = limit
 			}
 		}
 
@@ -334,61 +335,45 @@ func (rr *RecvReader) Read(p []byte) (n int, err error) {
 		p = p[:expected]
 	}
 
-	buf := rr.buf
-	read := rr.read
-
 	if len(rr.buf) > 0 {
-		n = copy(p, buf)
-		buf = buf[n:]
+		n = copy(p, rr.buf)
+		rr.buf = rr.buf[n:]
 		p = p[n:]
 
-		read += n
+		rr.read += n
 
 		if len(p) == 0 {
-			rr.buf = buf
-			rr.read = read
-
 			return n, nil
 		}
 	}
+	rr.buf = nil
 
-	data, err := rr.Recv()
-	if err != nil {
-		if n > 0 {
-			rr.buf = buf
-			rr.read = read
-
-			return n, nil
+	for {
+		data, err := rr.Recv()
+		if err != nil {
+			return n, err
 		}
 
-		return 0, err
-	}
+		if len(data) == 0 {
+			continue
+		}
 
-	if len(data) == 0 {
-		rr.buf = buf
-		rr.read = read
+		m := copy(p, data)
+		data = data[m:]
+		p = p[m:]
 
-		return n, nil
-	}
+		n += m
+		rr.read += m
 
-	m := copy(p, data)
-	data = data[m:]
-	p = p[m:]
+		if len(data) > 0 || len(p) == 0 {
+			rr.buf = data
 
-	n += m
-	read += m
+			break
+		}
 
-	if len(data) > 0 {
-		buf = data
-	} else {
-		buf = nil
-	}
-
-	rr.buf = buf
-	rr.read = read
-
-	if rr.read >= rr.expected {
-		return n, io.EOF
+		if rr.read >= rr.expected {
+			return n, io.EOF
+		}
 	}
 
 	return n, nil
