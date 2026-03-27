@@ -206,22 +206,24 @@ func Server() *cli.Command {
 			spew.Dump(serverConfig)
 
 			fx.New(
+				fx.StopTimeout(30*time.Second),
+
+				// These concrete adapters come first so we have early access to debugging.
 				adaptersruntime.AutoMaxProcsModule(),
 				adapterspprof.Module(&serverConfig.PProf),
-				fx.StopTimeout(30*time.Second),
-				adaptersetcd.Module(&serverConfig.Etcd),
 				adaptersfilestore.Module(),
 				adaptersfilesystem.Module(serverConfig.DataDir),
 				adaptersgrpcclient.Module(),
 				adaptersgrpcserver.Module(&serverConfig.Node.GRPC),
 				adaptershealth.Module(&serverConfig.Health),
-
 				adaptersotel.Module(),
 				adapterspebble.Module(serverConfig.DataDir),
 				adaptersremotepeer.Module(),
 				adaptersruntime.Module(),
 				adapterssystem.Module(),
 				adapterszerolog.Module(&serverConfig.Log),
+
+				// Application services.
 				applicationcommands.Module(),
 				applicationqueries.Module(),
 				applicationservices.Module(&serverConfig.Node.Advertise),
@@ -239,6 +241,9 @@ func Server() *cli.Command {
 						return nil
 					}))
 				}),
+
+				// The cluster adapters must come after the application services modules to prevent node identity TOCTOU bugs caused by misordered lifecycle hooks.
+				adaptersetcd.Module(&serverConfig.Etcd),
 			).Run()
 
 			return nil
