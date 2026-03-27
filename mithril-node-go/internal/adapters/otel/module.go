@@ -14,12 +14,14 @@ func Module() fx.Option {
 			NewMeter,
 			NewMeterProvider,
 			NewResource,
+			NewTextMapPropagator,
 			NewTracer,
 			NewTracerProvider,
 			fx.Annotate(NewVolumeMetricsExporter, fx.As(new(applicationservices.VolumeMetricsExporter))),
 		),
 		fx.Invoke(
 			otel.SetMeterProvider,
+			otel.SetTextMapPropagator,
 			otel.SetTracerProvider,
 			func(mp metric.MeterProvider, lc fx.Lifecycle) {
 				lc.Append(fx.StartHook(func() error {
