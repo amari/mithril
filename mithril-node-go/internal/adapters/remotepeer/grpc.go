@@ -10,6 +10,7 @@ import (
 	applicationerrors "github.com/amari/mithril/mithril-node-go/internal/application/errors"
 	applicationservices "github.com/amari/mithril/mithril-node-go/internal/application/services"
 	"github.com/amari/mithril/mithril-node-go/internal/domain"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
@@ -42,6 +43,7 @@ func (p *GRPCRemotePeerChunkServiceClientProvider) GetRemotePeerChunkServiceClie
 	// FIXME: add TLS support!
 	dialOpts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	}
 
 	cc, err := grpc.NewClient(fmt.Sprintf("mithrilnode://%010d", nodeID), dialOpts...)
