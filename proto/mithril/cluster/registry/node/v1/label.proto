@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package mithril.cluster.registry.node.v1;
+
+option go_package = "github.com/amari/mithril/gen/go/proto/mithril/cluster/registry/node/v1;registrynodev1";
+
+message Label {
+  string key = 1;
+  string value = 2;
+}

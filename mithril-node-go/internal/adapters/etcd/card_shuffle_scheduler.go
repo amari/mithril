@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	nodev1 "github.com/amari/mithril/gen/go/proto/mithril/cluster/node/v1"
+	discoveryv1 "github.com/amari/mithril/gen/go/proto/mithril/cluster/discovery/v1"
 	cardshufflev1 "github.com/amari/mithril/gen/go/proto/mithril/cluster/scheduler/cardshuffle/v1"
 	"github.com/amari/mithril/mithril-node-go/internal/domain"
 	"github.com/cenkalti/backoff/v5"
@@ -20,17 +20,11 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-const (
-	electionPrefix = "/schedulers/card-shuffle/leader"
-	generationKey  = "/schedulers/card-shuffle/generation"
-	presencePrefix = "/alive/nodes/"
-	decksPrefix    = "/schedulers/card-shuffle/decks"
-)
-
 type CardShuffleScheduler struct {
 	client         *clientv3.Client
 	nodeIDProvider domain.NodeIDProvider
 	log            *zerolog.Logger
+	prefix         Prefix
 
 	// Configurable
 	SessionTTL      int
@@ -45,7 +39,7 @@ type CardShuffleScheduler struct {
 	sessionCtxCancelFunc context.CancelFunc
 }
 
-func NewCardShuffleScheduler(client *clientv3.Client, nodeIDProvider domain.NodeIDProvider, log *zerolog.Logger) *CardShuffleScheduler {
+func NewCardShuffleScheduler(client *clientv3.Client, nodeIDProvider domain.NodeIDProvider, log *zerolog.Logger, prefix Prefix) *CardShuffleScheduler {
 	if log == nil {
 		l := zerolog.Nop()
 		log = &l
@@ -55,6 +49,7 @@ func NewCardShuffleScheduler(client *clientv3.Client, nodeIDProvider domain.Node
 		client:          client,
 		nodeIDProvider:  nodeIDProvider,
 		log:             log,
+		prefix:          prefix,
 		SessionTTL:      10,
 		ShuffleInterval: 5 * time.Second,
 		generation:      uint64(rand.Uint32()),
@@ -114,9 +109,15 @@ func (s *CardShuffleScheduler) loop(ctx context.Context, nodeID domain.NodeID) {
 		func() {
 			defer session.Close()
 
-			e := clientv3concurrency.NewElection(session, electionPrefix)
+			e := clientv3concurrency.NewElection(session, s.prefix.SchedulerCardShuffleElectionPrefix())
 
-			if err := e.Campaign(ctx, fmt.Sprintf("%10d", nodeID)); err != nil {
+			electionVal, err := protojson.Marshal(&cardshufflev1.ElectionRecord{NodeId: uint32(nodeID)})
+			if err != nil {
+				s.log.Debug().Err(err).Msg("failed to marshal election record")
+				return
+			}
+
+			if err := e.Campaign(ctx, string(electionVal)); err != nil {
 				s.log.Debug().Err(err).Msg("campaign failed")
 				return
 			}
@@ -148,6 +149,8 @@ func (s *CardShuffleScheduler) runLeaderLoop(ctx context.Context, session *clien
 }
 
 func (s *CardShuffleScheduler) performShuffleAndPublish(ctx context.Context) {
+	presencePrefix := s.prefix.DiscoveryNodePrefix()
+
 	resp, err := s.client.Get(ctx, presencePrefix, clientv3.WithPrefix())
 	if err != nil {
 		s.log.Debug().Err(err).Msg("failed to get presences")
@@ -156,7 +159,7 @@ func (s *CardShuffleScheduler) performShuffleAndPublish(ctx context.Context) {
 
 	nodeIDs := make([]uint32, 0, len(resp.Kvs))
 	for _, kv := range resp.Kvs {
-		var p nodev1.Presence
+		var p discoveryv1.NodeRecord
 		if err := protojson.Unmarshal(kv.Value, &p); err != nil {
 			s.log.Debug().Err(err).Msg("failed to unmarshal presence")
 			continue
@@ -197,6 +200,8 @@ func (s *CardShuffleScheduler) performShuffleAndPublish(ctx context.Context) {
 		s.lastDeckHash = out
 	}
 
+	decksPrefix := s.prefix.SchedulerCardShuffleDeckPrefix()
+
 	// Cleanup only when shrinking
 	if s.lastDeckCount != -1 && newDeckCount < s.lastDeckCount {
 		if _, err := s.client.Delete(ctx, decksPrefix, clientv3.WithPrefix()); err != nil {
@@ -215,7 +220,7 @@ func (s *CardShuffleScheduler) performShuffleAndPublish(ctx context.Context) {
 			continue
 		}
 
-		key := fmt.Sprintf("%s/%03d", decksPrefix, i+1)
+		key := s.prefix.SchedulerCardShuffleDeckKey(i + 1)
 		if _, err := s.client.Put(ctx, key, string(data)); err != nil {
 			s.log.Debug().Err(err).Str("key", key).Msg("failed to store deck")
 		}
@@ -227,7 +232,7 @@ func (s *CardShuffleScheduler) performShuffleAndPublish(ctx context.Context) {
 func (s *CardShuffleScheduler) bumpGeneration(ctx context.Context) {
 	s.generation += uint64(rand.Uint32())
 
-	gen := &cardshufflev1.Generation{
+	gen := &cardshufflev1.GenerationRecord{
 		Generation: s.generation,
 	}
 
@@ -237,12 +242,16 @@ func (s *CardShuffleScheduler) bumpGeneration(ctx context.Context) {
 		return
 	}
 
+	generationKey := s.prefix.SchedulerCardShuffleGenerationKey()
+
 	if _, err := s.client.Put(ctx, generationKey, string(data)); err != nil {
 		s.log.Debug().Err(err).Msg("failed to store generation")
 	}
 }
 
 func (s *CardShuffleScheduler) countDecksInEtcd(ctx context.Context) int {
+	decksPrefix := s.prefix.SchedulerCardShuffleDeckPrefix()
+
 	resp, err := s.client.Get(ctx, decksPrefix, clientv3.WithPrefix())
 	if err != nil {
 		s.log.Debug().Err(err).Msg("failed to count decks")
@@ -255,7 +264,7 @@ func (s *CardShuffleScheduler) countDecksInEtcd(ctx context.Context) int {
 func (s *CardShuffleScheduler) generateUniqueDecks(
 	nodeIDs []uint32,
 	log *zerolog.Logger,
-) []*cardshufflev1.Deck {
+) []*cardshufflev1.DeckRecord {
 	n := len(nodeIDs)
 
 	var deckCount int
@@ -265,10 +274,10 @@ func (s *CardShuffleScheduler) generateUniqueDecks(
 		deckCount = 100
 	}
 
-	decks := make([]*cardshufflev1.Deck, 0, deckCount)
-	seen := make(map[[32]byte]*cardshufflev1.Deck)
+	decks := make([]*cardshufflev1.DeckRecord, 0, deckCount)
+	seen := make(map[[32]byte]*cardshufflev1.DeckRecord)
 
-	hashDeck := func(d *cardshufflev1.Deck) [32]byte {
+	hashDeck := func(d *cardshufflev1.DeckRecord) [32]byte {
 		h := sha256.New()
 		buf := make([]byte, 4)
 
@@ -287,7 +296,7 @@ func (s *CardShuffleScheduler) generateUniqueDecks(
 		var permute func([]uint32, int)
 		permute = func(a []uint32, i int) {
 			if i == len(a) {
-				d := &cardshufflev1.Deck{NodeIds: append([]uint32(nil), a...)}
+				d := &cardshufflev1.DeckRecord{NodeIds: append([]uint32(nil), a...)}
 				h := hashDeck(d)
 
 				if existing, ok := seen[h]; ok {
@@ -326,7 +335,7 @@ func (s *CardShuffleScheduler) generateUniqueDecks(
 			cp[i], cp[j] = cp[j], cp[i]
 		})
 
-		d := &cardshufflev1.Deck{NodeIds: cp}
+		d := &cardshufflev1.DeckRecord{NodeIds: cp}
 		h := hashDeck(d)
 
 		if existing, ok := seen[h]; ok {
@@ -347,7 +356,7 @@ func (s *CardShuffleScheduler) generateUniqueDecks(
 	return decks
 }
 
-func equalDecks(a, b *cardshufflev1.Deck) bool {
+func equalDecks(a, b *cardshufflev1.DeckRecord) bool {
 	if len(a.NodeIds) != len(b.NodeIds) {
 		return false
 	}

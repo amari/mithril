@@ -1,10 +1,10 @@
 package adaptersetcd
 
 import (
-	"fmt"
+	"sort"
 	"sync"
 
-	nodev1 "github.com/amari/mithril/gen/go/proto/mithril/cluster/node/v1"
+	registrynodev1 "github.com/amari/mithril/gen/go/proto/mithril/cluster/registry/node/v1"
 	"github.com/amari/mithril/mithril-node-go/internal/domain"
 	"github.com/rs/zerolog"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -14,6 +14,7 @@ import (
 type VolumeLabelPublisher struct {
 	client *clientv3.Client
 	logger *zerolog.Logger
+	prefix Prefix
 
 	mu    sync.Mutex
 	value *EventualValue
@@ -21,10 +22,11 @@ type VolumeLabelPublisher struct {
 
 var _ domain.VolumeLabelPublisher = (*VolumeLabelPublisher)(nil)
 
-func NewVolumeLabelPublisher(client *clientv3.Client, logger *zerolog.Logger) *VolumeLabelPublisher {
+func NewVolumeLabelPublisher(client *clientv3.Client, logger *zerolog.Logger, prefix Prefix) *VolumeLabelPublisher {
 	return &VolumeLabelPublisher{
 		client: client,
 		logger: logger,
+		prefix: prefix,
 	}
 }
 
@@ -33,7 +35,7 @@ func (p *VolumeLabelPublisher) Publish(node domain.NodeID, labels map[domain.Vol
 	defer p.mu.Unlock()
 
 	if p.value == nil {
-		key := fmt.Sprintf("/registry/nodes/%010d/labeled_volume_bitsets", uint32(node))
+		key := p.prefix.RegistryNodeVolumesKey(node)
 
 		p.value = NewEventualValue(p.client, key)
 	}
@@ -57,8 +59,9 @@ func (p *VolumeLabelPublisher) Publish(node domain.NodeID, labels map[domain.Vol
 		}
 	}
 
-	msg := nodev1.LabeledVolumeBitsets{
-		NodeId: uint32(node),
+	msg := registrynodev1.VolumeRecord{
+		NodeId:            uint32(node),
+		LabeledVolumeSets: make([]*registrynodev1.VolumeRecord_LabelVolumeSet, 0, len(sets)),
 	}
 	for key, a := range sets {
 		for value, set := range a {
@@ -67,13 +70,18 @@ func (p *VolumeLabelPublisher) Publish(node domain.NodeID, labels map[domain.Vol
 				return
 			}
 
-			msg.Bitsets = append(msg.Bitsets, &nodev1.LabeledVolumeBitsets_LabeledVolumeBitset{
-				Key:       key,
-				Value:     value,
-				VolumeIds: volumeIds,
+			msg.LabeledVolumeSets = append(msg.LabeledVolumeSets, &registrynodev1.VolumeRecord_LabelVolumeSet{
+				Label: &registrynodev1.Label{
+					Key:   key,
+					Value: value,
+				},
+				VolumeSet: volumeIds,
 			})
 		}
 	}
+	sort.Slice(msg.LabeledVolumeSets, func(i, j int) bool {
+		return msg.LabeledVolumeSets[i].Label.Key < msg.LabeledVolumeSets[j].Label.Key
+	})
 
 	value, err := protojson.Marshal(&msg)
 	if err != nil {

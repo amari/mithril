@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package mithril.cluster.metadata.node.v1;
+
+option go_package = "github.com/amari/mithril/gen/go/proto/mithril/cluster/metadata/node/v1;metadatanodev1";
+
+message TaintRecord {
+  uint32 node_id = 1;
+  string key = 2;
+  string value = 3;
+  Effect effect = 4;
+
+  enum Effect {
+    EFFECT_UNSPECIFIED = 0;
+    EFFECT_NO_SCHEDULE = 1;
+    EFFECT_PREFER_NO_SCHEDULE = 2;
+    EFFECT_NO_EXECUTE = 3;
+  }
+}

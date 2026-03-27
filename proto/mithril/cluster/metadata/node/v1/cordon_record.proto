@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package mithril.cluster.metadata.node.v1;
+
+option go_package = "github.com/amari/mithril/gen/go/proto/mithril/cluster/metadata/node/v1;metadatanodev1";
+
+message CordonRecord {
+  uint32 node_id = 1;
+}

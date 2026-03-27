@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	nodev1 "github.com/amari/mithril/gen/go/proto/mithril/cluster/node/v1"
+	discoveryv1 "github.com/amari/mithril/gen/go/proto/mithril/cluster/discovery/v1"
 	"github.com/amari/mithril/mithril-node-go/internal/domain"
 	"github.com/cenkalti/backoff/v5"
 	"github.com/rs/zerolog"
@@ -18,6 +18,7 @@ import (
 type ClusterMap struct {
 	client *clientv3.Client
 	logger *zerolog.Logger
+	prefix Prefix
 
 	mu        sync.RWMutex
 	wg        sync.WaitGroup
@@ -27,10 +28,11 @@ type ClusterMap struct {
 	subs      map[domain.NodeID]map[chan struct{}]struct{}
 }
 
-func NewClusterMap(client *clientv3.Client, logger *zerolog.Logger) *ClusterMap {
+func NewClusterMap(client *clientv3.Client, logger *zerolog.Logger, prefix Prefix) *ClusterMap {
 	return &ClusterMap{
 		client: client,
 		logger: logger,
+		prefix: prefix,
 		subs:   make(map[domain.NodeID]map[chan struct{}]struct{}),
 	}
 }
@@ -64,11 +66,11 @@ func (m *ClusterMap) Stop(ctx context.Context) error {
 	}
 }
 
-const aliveNodesPrefix = "/alive/nodes/"
-
 func (m *ClusterMap) watchLoop(ctx context.Context) {
 	bo := backoff.NewExponentialBackOff()
 	bo.Reset()
+
+	aliveNodesPrefix := m.prefix.DiscoveryNodePrefix()
 
 	for {
 		select {
@@ -93,7 +95,7 @@ func (m *ClusterMap) watchLoop(ctx context.Context) {
 
 		nodes := make(map[domain.NodeID]*domain.NodePresence, len(resp.Kvs))
 		for _, kv := range resp.Kvs {
-			var msg nodev1.Presence
+			var msg discoveryv1.NodeRecord
 			if err := protojson.Unmarshal(kv.Value, &msg); err != nil {
 				// TODO: log the error
 				continue
@@ -105,7 +107,7 @@ func (m *ClusterMap) watchLoop(ctx context.Context) {
 				ID:    nodeID,
 				Nonce: [32]byte(msg.GetNonce()),
 				GRPC: domain.NodePresenceGRPC{
-					URLs: msg.GetGrpc().GetUrls(),
+					URLs: msg.GetEndpoints().GetGrpc(),
 				},
 			}
 		}
@@ -141,7 +143,7 @@ func (m *ClusterMap) watchLoop(ctx context.Context) {
 
 						switch event.Type {
 						case mvccpb.PUT:
-							var msg nodev1.Presence
+							var msg discoveryv1.NodeRecord
 							if err := protojson.Unmarshal(event.Kv.Value, &msg); err != nil {
 								continue
 							}
@@ -152,7 +154,7 @@ func (m *ClusterMap) watchLoop(ctx context.Context) {
 								ID:    nodeID,
 								Nonce: [32]byte(msg.GetNonce()),
 								GRPC: domain.NodePresenceGRPC{
-									URLs: msg.GetGrpc().GetUrls(),
+									URLs: msg.GetEndpoints().GetGrpc(),
 								},
 							}
 

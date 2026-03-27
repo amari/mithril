@@ -17,6 +17,7 @@ func Module(clientCfg *configetcd.Client) fx.Option {
 	}
 
 	options := []fx.Option{
+		fx.Supply(NewPrefix(clientCfg.Prefix)),
 		fx.Provide(
 			NewCardShuffleScheduler,
 			NewClusterMap,

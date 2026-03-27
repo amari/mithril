@@ -1,12 +1,12 @@
 syntax = "proto3";
 
-package mithril.cluster.node.v1;
+package mithril.cluster.registry.node.v1;
 
-option go_package = "github.com/amari/mithril/gen/go/proto/mithril/cluster/node/v1;nodev1";
+option go_package = "github.com/amari/mithril/gen/go/proto/mithril/cluster/registry/node/v1;registrynodev1";
 
-message Taints {
-  // Denormalized from the etcd key for convenience.
+message TaintRecord {
   uint32 node_id = 1;
+  repeated Taint taints = 2;
 
   message Taint {
     string key = 1;
@@ -20,5 +20,4 @@ message Taints {
       EFFECT_NO_EXECUTE = 3;
     }
   }
-  repeated Taint taints = 2;
 }

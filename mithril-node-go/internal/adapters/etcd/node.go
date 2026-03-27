@@ -10,7 +10,8 @@ import (
 	"sync"
 	"time"
 
-	nodev1 "github.com/amari/mithril/gen/go/proto/mithril/cluster/node/v1"
+	discoveryv1 "github.com/amari/mithril/gen/go/proto/mithril/cluster/discovery/v1"
+	registrynodev1 "github.com/amari/mithril/gen/go/proto/mithril/cluster/registry/node/v1"
 	"github.com/amari/mithril/mithril-node-go/internal/domain"
 	"github.com/cenkalti/backoff/v5"
 	"github.com/rs/zerolog"
@@ -25,18 +26,20 @@ type NodeClaimModel struct {
 
 type NodeClaimRegistry struct {
 	client *clientv3.Client
+	prefix Prefix
 }
 
 var _ domain.NodeClaimRegistry = (*NodeClaimRegistry)(nil)
 
-func NewNodeClaimRegistry(client *clientv3.Client) *NodeClaimRegistry {
+func NewNodeClaimRegistry(client *clientv3.Client, prefix Prefix) *NodeClaimRegistry {
 	return &NodeClaimRegistry{
 		client: client,
+		prefix: prefix,
 	}
 }
 
 func (r *NodeClaimRegistry) Register(ctx context.Context, claim *domain.NodeClaim) error {
-	key := fmt.Sprintf("/claims/%010d", uint32(claim.ID))
+	key := r.prefix.RegistryNodeClaimKey(claim.ID)
 
 	bo := backoff.NewExponentialBackOff()
 	bo.Reset()
@@ -119,7 +122,7 @@ func (r *NodeClaimRegistry) Register(ctx context.Context, claim *domain.NodeClai
 }
 
 func (r *NodeClaimRegistry) Check(ctx context.Context, claim *domain.NodeClaim) error {
-	key := fmt.Sprintf("/claims/%010d", uint32(claim.ID))
+	key := r.prefix.RegistryNodeClaimKey(claim.ID)
 
 	bo := backoff.NewExponentialBackOff()
 	bo.Reset()
@@ -173,6 +176,7 @@ func (r *NodeClaimRegistry) Check(ctx context.Context, claim *domain.NodeClaim) 
 type NodeLabelPublisher struct {
 	client *clientv3.Client
 	logger *zerolog.Logger
+	prefix Prefix
 
 	mu    sync.Mutex
 	value *EventualValue
@@ -180,10 +184,11 @@ type NodeLabelPublisher struct {
 
 var _ domain.NodeLabelPublisher = (*NodeLabelPublisher)(nil)
 
-func NewNodeLabelPublisher(client *clientv3.Client, logger *zerolog.Logger) *NodeLabelPublisher {
+func NewNodeLabelPublisher(client *clientv3.Client, logger *zerolog.Logger, prefix Prefix) *NodeLabelPublisher {
 	return &NodeLabelPublisher{
 		client: client,
 		logger: logger,
+		prefix: prefix,
 	}
 }
 
@@ -192,16 +197,16 @@ func (p *NodeLabelPublisher) Publish(node domain.NodeID, labels map[string]strin
 	defer p.mu.Unlock()
 
 	if p.value == nil {
-		key := fmt.Sprintf("/registry/nodes/%010d/labels", uint32(node))
+		key := p.prefix.RegistryNodeLabelsKey(node)
 
 		p.value = NewEventualValue(p.client, key)
 	}
 
-	msg := nodev1.Labels{
+	msg := registrynodev1.LabelRecord{
 		NodeId: uint32(node),
 	}
 	for key, value := range labels {
-		msg.Labels = append(msg.Labels, &nodev1.Labels_Label{
+		msg.Labels = append(msg.Labels, &registrynodev1.Label{
 			Key:   key,
 			Value: value,
 		})
@@ -220,6 +225,7 @@ func (p *NodeLabelPublisher) Publish(node domain.NodeID, labels map[string]strin
 type NodePresencePublisher struct {
 	client *clientv3.Client
 	logger *zerolog.Logger
+	prefix Prefix
 
 	mu    sync.Mutex
 	value *LeasedValue
@@ -227,10 +233,11 @@ type NodePresencePublisher struct {
 
 var _ domain.NodePresencePublisher = (*NodePresencePublisher)(nil)
 
-func NewNodePresencePublisher(client *clientv3.Client, logger *zerolog.Logger) *NodePresencePublisher {
+func NewNodePresencePublisher(client *clientv3.Client, logger *zerolog.Logger, prefix Prefix) *NodePresencePublisher {
 	return &NodePresencePublisher{
 		client: client,
 		logger: logger,
+		prefix: prefix,
 	}
 }
 
@@ -239,16 +246,16 @@ func (p *NodePresencePublisher) Publish(presence *domain.NodePresence) {
 	defer p.mu.Unlock()
 
 	if p.value == nil {
-		key := fmt.Sprintf("/alive/nodes/%010d", uint32(presence.ID))
+		key := p.prefix.DiscoveryNodeKey(presence.ID)
 
 		p.value = NewLeasedValue(p.client, key, 30)
 	}
 
-	msg := nodev1.Presence{
+	msg := discoveryv1.NodeRecord{
 		NodeId: uint32(presence.ID),
 		Nonce:  presence.Nonce[:],
-		Grpc: &nodev1.Presence_GRPCInfo{
-			Urls: presence.GRPC.URLs,
+		Endpoints: &discoveryv1.NodeRecord_Endpoints{
+			Grpc: presence.GRPC.URLs,
 		},
 	}
 

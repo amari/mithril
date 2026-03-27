@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package mithril.cluster.metadata.node.v1;
+
+option go_package = "github.com/amari/mithril/gen/go/proto/mithril/cluster/metadata/node/v1;metadatanodev1";
+
+message LabelRecord {
+  uint32 node_id = 1;
+  string key = 2;
+  string value = 3;
+}

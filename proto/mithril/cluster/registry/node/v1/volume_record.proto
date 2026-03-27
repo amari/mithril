@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package mithril.cluster.registry.node.v1;
+
+import "mithril/cluster/registry/node/v1/label.proto";
+
+option go_package = "github.com/amari/mithril/gen/go/proto/mithril/cluster/registry/node/v1;registrynodev1";
+
+message VolumeRecord {
+  uint32 node_id = 1;
+  repeated LabelVolumeSet labeled_volume_sets = 2;
+
+  message LabelVolumeSet {
+    Label label = 1;
+
+    // Volume ID bitset as little-endian uint64 slice.
+    bytes volume_set = 2;
+  }
+}

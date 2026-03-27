@@ -4,6 +4,6 @@ package mithril.cluster.scheduler.cardshuffle.v1;
 
 option go_package = "github.com/amari/mithril/gen/go/proto/mithril/cluster/scheduler/cardshuffle/v1;cardshufflev1";
 
-message Deck {
+message DeckRecord {
   repeated uint32 node_ids = 1;
 }

@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package mithril.cluster.discovery.v1;
+
+option go_package = "github.com/amari/mithril/gen/go/proto/mithril/cluster/discovery/v1;discoveryv1";
+
+message NodeRecord {
+  uint32 node_id = 1;
+  bytes nonce = 2;
+
+  Endpoints endpoints = 3;
+
+  message Endpoints {
+    // Active gRPC targets for fast-path cluster operations and client routing.
+    repeated string grpc = 1;
+
+    // Future expansion examples:
+    // repeated string http = 2;
+    // repeated string metrics = 3;
+  }
+}
